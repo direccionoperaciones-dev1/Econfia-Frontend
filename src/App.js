@@ -46,6 +46,7 @@ import TitulosValidationForm from "./views/TitulosValidationForm";
 import AdminPanel from "./pages/AdminPanel";
 import AdminUsuarios from "./components/AdminUsuarios";
 import AdminPlanes from "./components/AdminPlanes";
+import AdminRoute from "./components/AdminRoute";
 import AdminFuentes from "./components/AdminFuentes";
 import EmpresaRuesResult from "./components/EmpresaRuesResult";
 import ConsultaEmpresa from "./views/ConsultaEmpresa";
@@ -828,7 +829,7 @@ export default function App() {
               <Route path="/c2e6b9a4"          element={<Ayuda />}                    />
               <Route path="/7f2b9e4d"          element={<MonitoreoFuentes />}         />
               <Route path="/7b3f9d1e"          element={<AdminUsuarios />}            />
-              <Route path="/1e5c8a4b"          element={<AdminPlanes />}              />
+              <Route path="/1e5c8a4b"          element={<AdminRoute><AdminPlanes /></AdminRoute>} />
               <Route path="/4d9b2f6e"          element={<AdminFuentes />}             />
               <Route path="/5d2a9c8e"          element={<AdminSoporte />}             />
               <Route path="/2c8e5f1a"          element={<AdminBlog />}                />

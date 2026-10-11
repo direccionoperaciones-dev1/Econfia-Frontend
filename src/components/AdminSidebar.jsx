@@ -2,7 +2,7 @@ import React from "react";
 
 const ITEMS = [
   { key: "users",    icon: "👤", label: "Usuarios" },
-  { key: "planes",   icon: "📦", label: "Planes" },
+  { key: "planes",   icon: "📦", label: "Planes y propuestas" },
   { key: "fuentes",  icon: "🗂️",  label: "Fuentes" },
   { key: "monitoreo", icon: "📡", label: "Monitoreo de fuentes" },
   { key: "soporte",  icon: "💬", label: "Soporte técnico" },

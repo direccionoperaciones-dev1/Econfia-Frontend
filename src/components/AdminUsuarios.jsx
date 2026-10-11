@@ -62,11 +62,26 @@ const Badge = ({ children, color }) => {
   );
 };
 
+const ModeButton = ({ children, active, disabled = false, onClick, activeClass }) => (
+  <button
+    type="button"
+    disabled={disabled}
+    onClick={onClick}
+    className={`rounded-lg border px-2 py-2 text-xs font-bold transition ${
+      active
+        ? activeClass
+        : "border-white/10 bg-white/[0.025] text-white/45 hover:border-white/25 hover:text-white/75"
+    } disabled:cursor-not-allowed disabled:opacity-20`}
+  >
+    {children}
+  </button>
+);
+
 // ─── Modal oscuro elegante (reemplaza el Modal blanco en esta vista) ──
-const Sheet = ({ children, onClose, title, subtitle, icon }) => (
+const Sheet = ({ children, onClose, title, subtitle, icon, wide = false }) => (
   <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onClick={onClose}>
     <div
-      className="relative flex max-h-[90vh] w-full max-w-md flex-col overflow-hidden rounded-[24px] border border-brand/25 bg-gradient-to-br from-slate-950 via-blue-950/40 to-slate-950 shadow-2xl shadow-brand/15"
+      className={`relative flex max-h-[90vh] w-full ${wide ? "max-w-5xl" : "max-w-md"} flex-col overflow-hidden rounded-[24px] border border-brand/25 bg-gradient-to-br from-slate-950 via-blue-950/40 to-slate-950 shadow-2xl shadow-brand/15`}
       onClick={(e) => e.stopPropagation()}
     >
       <div className="pointer-events-none absolute -top-16 -right-16 h-44 w-44 rounded-full bg-brand/10 blur-3xl" />
@@ -120,6 +135,15 @@ const AdminUsuarios = () => {
   const [selectedPlanes, setSelectedPlanes] = useState([]);
   const [editUserData, setEditUserData]     = useState({ username: "", email: "", first_name: "", last_name: "", password: "" });
   const [showPassword, setShowPassword]     = useState(false);
+
+  // Configuración personalizada de fuentes por usuario (Basic Element)
+  const [showFuentesModal, setShowFuentesModal] = useState(false);
+  const [fuentesUser, setFuentesUser] = useState(null);
+  const [fuentesCatalogo, setFuentesCatalogo] = useState([]);
+  const [fuentesPersonalizada, setFuentesPersonalizada] = useState(false);
+  const [fuentesSearch, setFuentesSearch] = useState("");
+  const [fuentesLoading, setFuentesLoading] = useState(false);
+  const [fuentesSaving, setFuentesSaving] = useState(false);
 
   // White-label (Organizacion)
   const [organizaciones, setOrganizaciones]       = useState([]);
@@ -390,6 +414,85 @@ const AdminUsuarios = () => {
       }
     } catch {
       setToast({ type: "error", message: "Error al guardar planes" });
+    }
+  };
+
+  // ── Fuentes personalizadas de Basic Element ─────────────────
+  const handleOpenFuentes = async (user) => {
+    if (!user?.perfil) return;
+    setFuentesUser(user);
+    setFuentesSearch("");
+    setFuentesLoading(true);
+    setShowFuentesModal(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/admin/perfiles/${user.perfil.id}/fuentes/?plan=basic-element`,
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "No se pudo cargar la configuración.");
+      setFuentesCatalogo(data.fuentes || []);
+      setFuentesPersonalizada(!!data.personalizada);
+    } catch (error) {
+      setShowFuentesModal(false);
+      setToast({ type: "error", message: error.message });
+    } finally {
+      setFuentesLoading(false);
+    }
+  };
+
+  const handleFuenteModo = (clave, modo) => {
+    setFuentesCatalogo((actual) => actual.map((fuente) =>
+      fuente.clave === clave
+        ? { ...fuente, modo: fuente.modo === modo ? null : modo }
+        : fuente
+    ));
+  };
+
+  const handleSaveFuentes = async () => {
+    const fuentes = fuentesCatalogo
+      .filter((fuente) => fuente.modo)
+      .map(({ clave, modo }) => ({ clave, modo }));
+    if (!fuentes.length) {
+      setToast({ type: "error", message: "Selecciona al menos una fuente." });
+      return;
+    }
+    setFuentesSaving(true);
+    try {
+      const res = await fetch(`${API_URL}/api/admin/perfiles/${fuentesUser.perfil.id}/fuentes/`, {
+        method: "PUT",
+        headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: "basic-element", fuentes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "No se pudo guardar la configuración.");
+      setFuentesCatalogo(data.fuentes || []);
+      setFuentesPersonalizada(true);
+      setToast({ type: "success", message: `Configuración guardada: ${data.total_seleccionadas} fuentes.` });
+    } catch (error) {
+      setToast({ type: "error", message: error.message });
+    } finally {
+      setFuentesSaving(false);
+    }
+  };
+
+  const handleRestoreFuentes = async () => {
+    if (!window.confirm("¿Restaurar las fuentes predeterminadas de Basic Element para este usuario?")) return;
+    setFuentesSaving(true);
+    try {
+      const res = await fetch(
+        `${API_URL}/api/admin/perfiles/${fuentesUser.perfil.id}/fuentes/?plan=basic-element`,
+        { method: "DELETE", headers: { Authorization: `Token ${token}` } }
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "No se pudo restaurar la configuración.");
+      setFuentesCatalogo(data.fuentes || []);
+      setFuentesPersonalizada(false);
+      setToast({ type: "success", message: "Se restauraron las fuentes predeterminadas del plan." });
+    } catch (error) {
+      setToast({ type: "error", message: error.message });
+    } finally {
+      setFuentesSaving(false);
     }
   };
 
@@ -1141,6 +1244,9 @@ const AdminUsuarios = () => {
                     <Accion icon="💳" tone="cyan"   label="Créditos" sub="Aumentar / ajustar saldo" onClick={() => act(() => handleOpenConsultasModal(gu))} />
                     <Accion icon="📊" tone="teal"   label="Ver consultas" sub="Cédulas consultadas" onClick={() => act(() => handleVerConsultas(gu))} />
                     {gu.perfil && <Accion icon="📦" tone="sky" label="Editar planes" sub="Asignar o quitar planes" onClick={() => act(() => handleEditPlanes(gu))} />}
+                    {gu.perfil && planesU.some((plan) => plan.nombre === "basic-element") && (
+                      <Accion icon="🧩" tone="teal" label="Configurar fuentes" sub="Captura y sin captura" onClick={() => act(() => handleOpenFuentes(gu))} />
+                    )}
                     {gu.perfil && <Accion icon="🎨" tone="fuchsia" label={perfil.organizacion ? `Marca: ${perfil.organizacion.nombre}` : "White-label"} sub="Marca blanca del cliente" onClick={() => act(() => handleAbrirOrganizacion(gu))} />}
                     {gu.perfil && <Accion icon="⚡" tone="violet" label={perfil.consultas_masivas ? "Masivas (activas)" : "Masivas"} sub="Consultas masivas" onClick={() => act(() => { setMasivasUser(gu); setMasivasPlanId(""); setShowMasivasModal(true); })} />}
                     <Accion icon="✏️" tone="indigo" label="Editar usuario" sub="Datos de la cuenta" onClick={() => act(() => handleEditUser(gu))} />
@@ -1399,6 +1505,88 @@ const AdminUsuarios = () => {
           >
             Guardar cambios
           </button>
+        </Sheet>
+      )}
+
+      {/* ── Modal: Fuentes personalizadas de Basic Element ── */}
+      {showFuentesModal && (
+        <Sheet
+          onClose={() => setShowFuentesModal(false)}
+          icon="🧩"
+          title="Configurar fuentes"
+          subtitle={`Basic Element · ${fuentesUser?.username || ""}`}
+          wide
+        >
+          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge color={fuentesPersonalizada ? "violet" : "cyan"}>
+                  {fuentesPersonalizada ? "Configuración personalizada" : "Valores del plan"}
+                </Badge>
+                <span className="text-xs text-white/45">
+                  {fuentesCatalogo.filter((fuente) => fuente.modo).length} fuentes activas
+                </span>
+              </div>
+              <p className="mt-2 max-w-2xl text-xs leading-5 text-white/45">
+                Cada fuente puede ejecutarse con evidencia visual, sin captura o quedar deshabilitada únicamente para este usuario.
+              </p>
+            </div>
+            <div className="relative w-full md:w-72">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/35"><SearchIcon /></span>
+              <input
+                value={fuentesSearch}
+                onChange={(e) => setFuentesSearch(e.target.value)}
+                placeholder="Buscar fuente..."
+                className="w-full rounded-xl border border-white/10 bg-white/5 py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-white/30 focus:border-brand/50"
+              />
+            </div>
+          </div>
+
+          <div className="mb-2 hidden grid-cols-[minmax(0,1fr)_120px_130px_110px] gap-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/35 md:grid">
+            <span>Fuente</span><span className="text-center">Con captura</span><span className="text-center">Sin captura</span><span className="text-center">Desactivada</span>
+          </div>
+          <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
+            {fuentesLoading ? (
+              <div className="flex items-center justify-center gap-2 py-14 text-sm text-white/50"><SpinIcon /> Cargando catálogo…</div>
+            ) : fuentesCatalogo
+              .filter((fuente) => {
+                const q = fuentesSearch.trim().toLowerCase();
+                return !q || fuente.nombre.toLowerCase().includes(q) || fuente.clave.toLowerCase().includes(q);
+              })
+              .map((fuente) => (
+                <div key={fuente.clave} className="grid gap-2 rounded-xl border border-white/10 bg-white/[0.035] p-3 md:grid-cols-[minmax(0,1fr)_120px_130px_110px] md:items-center">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-white">{fuente.nombre}</div>
+                    <div className="mt-0.5 flex items-center gap-2 text-[10px] text-white/35">
+                      <span className="truncate font-mono">{fuente.clave}</span>
+                      {fuente.predeterminada && <span className="rounded bg-brand/15 px-1.5 py-0.5 font-bold text-brand">DEL PLAN</span>}
+                    </div>
+                  </div>
+                  <ModeButton
+                    active={fuente.modo === "captura"}
+                    disabled={!fuente.disponible_captura}
+                    onClick={() => handleFuenteModo(fuente.clave, "captura")}
+                    activeClass="border-cyan-400/60 bg-cyan-400/15 text-cyan-200"
+                  >📸 Captura</ModeButton>
+                  <ModeButton
+                    active={fuente.modo === "sin_captura"}
+                    disabled={!fuente.disponible_sin_captura}
+                    onClick={() => handleFuenteModo(fuente.clave, "sin_captura")}
+                    activeClass="border-violet-400/60 bg-violet-400/15 text-violet-200"
+                  >⚡ Sin captura</ModeButton>
+                  <ModeButton
+                    active={!fuente.modo}
+                    onClick={() => setFuentesCatalogo((actual) => actual.map((item) => item.clave === fuente.clave ? { ...item, modo: null } : item))}
+                    activeClass="border-red-400/50 bg-red-400/10 text-red-200"
+                  >Desactivada</ModeButton>
+                </div>
+              ))}
+          </div>
+
+          <div className="mt-5 flex flex-col-reverse gap-2 border-t border-white/10 pt-4 sm:flex-row sm:justify-between">
+            <button type="button" onClick={handleRestoreFuentes} disabled={fuentesSaving || !fuentesPersonalizada} className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold text-white/65 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-35">Restaurar valores del plan</button>
+            <button type="button" onClick={handleSaveFuentes} disabled={fuentesSaving || fuentesLoading} className="rounded-xl bg-gradient-to-r from-brand to-brand-2 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand/20 disabled:opacity-50">{fuentesSaving ? "Guardando…" : "Guardar configuración"}</button>
+          </div>
         </Sheet>
       )}
 

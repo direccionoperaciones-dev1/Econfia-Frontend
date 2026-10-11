@@ -124,7 +124,7 @@ if (isAdmin) {
   menuItems = [
     ...menuItems,
     { path: "/7b3f9d1e", icon: <User size={16} strokeWidth={1.75} />, label: "Admin Usuarios", color: "rose" },
-    { path: "/1e5c8a4b", icon: <FileText size={16} strokeWidth={1.75} />, label: "Admin Planes", color: "amber" },
+    { path: "/1e5c8a4b", icon: <FileText size={16} strokeWidth={1.75} />, label: "Planes y propuestas", color: "amber" },
     { path: "/4d9b2f6e", icon: <Search size={16} strokeWidth={1.75} />, label: "Admin Fuentes", color: "cyan" },
     { path: "/2c8e5f1a", icon: <BookOpen size={16} strokeWidth={1.75} />, label: "Admin Blog", color: "violet" },
     { path: "/8f4a1d7c", icon: <Volume2 size={16} strokeWidth={1.75} />, label: "Admin Sonidos", color: "emerald" },
@@ -182,7 +182,7 @@ else if (user?.perfil?.es_admin_organizacion) {
     "Ayuda": "Soporte y guías",
     "Monitoreo de fuentes": "Estado de las fuentes",
     "Admin Usuarios": "Gestión de usuarios",
-    "Admin Planes": "Gestión de planes",
+    "Planes y propuestas": "Gestión comercial",
     "Admin Fuentes": "Gestión de fuentes",
     "Admin Blog": "Gestión del blog",
     "Admin Sonidos": "Gestión de sonidos",
