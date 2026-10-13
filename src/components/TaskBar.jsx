@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
   Search, FileText, LogOut, User,  BookOpen,  Volume2,
-  ChevronLeft, ChevronRight, Sun, Moon, Activity, MousePointerClick, Landmark,
+  ChevronLeft, ChevronRight, Sun, Moon, Activity, MousePointerClick, Landmark, ShieldCheck,
 } from "lucide-react";
 
 import { Fuel } from "lucide-react";
@@ -80,6 +80,9 @@ if (hasPlanes) {
   }
   if (planes.includes("econfiafast")) {
     consultaItems.push({ path: "/7f3a9e2b", icon: <ZapIcon size={26} />, label: "E-Fast", color: "yellow" });
+  }
+  if (planes.includes("consolidado-riesgo") || planes.includes("econfiafast") || isAdmin) {
+    consultaItems.push({ path: "/consolidado-riesgo", icon: <ShieldCheck size={27} />, label: "E-Consolidado", color: "cyan" });
   }
   if (planes.includes("essencial-express")) {
     consultaItems.push({ path: "/a1e6c4b8", icon: <CursorClickIcon size ={26} />, label: "E-Essential Express", color: "pink" });
@@ -170,6 +173,7 @@ else if (user?.perfil?.es_admin_organizacion) {
     "Empresa RUES": "Información empresarial confiable",
     "Econfia Asset Search": "Matrículas y direcciones registradas",
     "E-Fast": "Validación instantánea de documentos",
+    "E-Consolidado": "Expediente vigente e histórico",
     "E-Essencial Express": "Consultas por número de documento",
     "Validación de títulos": "Verificación académica",
     "E-Identidad": "Verificación de identidad",
