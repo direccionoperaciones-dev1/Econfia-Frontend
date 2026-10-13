@@ -31,7 +31,10 @@ import {
   normalizeAssetSearchConsulta,
   isEmpresaConsulta,
   normalizeEmpresaConsulta,
+  isConsolidadoConsulta,
+  normalizeConsolidadoConsulta,
 } from "../utils/experian";
+import { ConsolidadoDetalle } from "./ConsultaConsolidadoRiesgo";
 import { useTheme } from "../context/ThemeContext";
 
 const EXPERIAN_PDF_THEME_OPTIONS = ["claro", "oscuro"];
@@ -597,13 +600,14 @@ export default function Resultados() {
         Authorization: `Token ${token}`,
       };
 
-      const [consultasRes, experianRes, hdcRes, reconocerRes, assetSearchRes, empresaRes] = await Promise.all([
+      const [consultasRes, experianRes, hdcRes, reconocerRes, assetSearchRes, empresaRes, consolidadoRes] = await Promise.all([
         fetch(`${API_URL}/api/consultas/`, { headers }),
         fetch(`${API_URL}/api/experian/consultas/`, { headers }),
         fetch(`${API_URL}/api/hdc/consultas/`, { headers }),
         fetch(`${API_URL}/api/reconocer/consultas/`, { headers }),
         fetch(`${API_URL}/api/inmuebles-snr/historial/?limit=100`, { headers }),
         fetch(`${API_URL}/api/historial-empresas-rues/?limit=80`, { headers }),
+        fetch(`${API_URL}/api/consolidado-riesgo/consultas/?limit=100`, { headers }),
       ]);
 
       if (!consultasRes.ok) throw new Error(`Error HTTP: ${consultasRes.status}`);
@@ -635,6 +639,11 @@ export default function Resultados() {
         const empresaJson = await empresaRes.json();
         empresaRows = (empresaJson?.empresas || []).map(normalizeEmpresaConsulta);
       }
+      let consolidadoRows = [];
+      if (consolidadoRes.ok) {
+        const consolidadoJson = await consolidadoRes.json();
+        consolidadoRows = (consolidadoJson?.consultas || []).map(normalizeConsolidadoConsulta);
+      }
 
       const mergedRows = [
         ...(Array.isArray(consultasJson) ? consultasJson : []).map(normalizeCoreConsulta),
@@ -643,6 +652,7 @@ export default function Resultados() {
         ...reconocerRows,
         ...assetSearchRows,
         ...empresaRows,
+        ...consolidadoRows,
       ].filter(hasDisplayableCoreIdentity).sort((left, right) => {
         const leftTime = left.fecha ? new Date(left.fecha).getTime() : 0;
         const rightTime = right.fecha ? new Date(right.fecha).getTime() : 0;
@@ -1005,6 +1015,7 @@ export default function Resultados() {
   const isReconocerActual = isReconocerConsulta(consultaActual);
   const isAssetSearchActual = isAssetSearchConsulta(consultaActual);
   const isEmpresaActual = isEmpresaConsulta(consultaActual);
+  const isConsolidadoActual = isConsolidadoConsulta(consultaActual);
 
   return (
     <section className="relative min-h-screen py-4 md:py-6 pb-32 md:pb-36 overflow-hidden bg-transparent">
@@ -1096,7 +1107,7 @@ export default function Resultados() {
           </div>
         ) : consultaTipoActual !== "e-identidad" ? (
         <div className="w-full max-w-7xl mx-auto min-h-[78vh] xl:min-h-[82vh] h-[calc(100vh-10rem)] max-h-[calc(100vh-5rem)]">
-          {!isHdcActual && !isReconocerActual && !isExperianActual && !isAssetSearchActual && !isEmpresaActual && (
+          {!isHdcActual && !isReconocerActual && !isExperianActual && !isAssetSearchActual && !isEmpresaActual && !isConsolidadoActual && (
             <FloatingActionsPortal
               apiUrl={API_URL}
               consultaId={consultaSeleccionada.id}
@@ -1110,7 +1121,20 @@ export default function Resultados() {
               onVerPdf={() => swiperRef.current?.slideTo(1)}
             />
           )}
-          {isAssetSearchActual ? (
+          {isConsolidadoActual ? (
+            <div className="h-full min-h-0 overflow-y-auto pt-2">
+              <div className="mb-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConsultaSeleccionada(null)}
+                  className="inline-flex items-center gap-2 rounded-lg border border-line/20 bg-surface/90 px-4 py-2 text-sm font-semibold text-content shadow-lg shadow-black/5 backdrop-blur-xl transition hover:border-brand/30 hover:bg-surface-2/90 hover:text-brand"
+                >
+                  <ArrowLeft className="h-4 w-4" /> Regresar
+                </button>
+              </div>
+              <ConsolidadoDetalle consultaId={consultaSeleccionada.id} />
+            </div>
+          ) : isAssetSearchActual ? (
             <div className="h-full min-h-0 overflow-y-auto pt-2">
               <div className="mb-4 flex items-center gap-2">
                 <button

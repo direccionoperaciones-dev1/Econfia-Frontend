@@ -97,6 +97,27 @@ export function normalizeReconocerConsulta(item) {
   };
 }
 
+// ── Econfia Consolidado ─────────────────────────────────────────────────────
+
+export function isConsolidadoConsulta(item) {
+  return String(item?.source || "").trim().toLowerCase() === "consolidado-riesgo";
+}
+
+export function normalizeConsolidadoConsulta(item) {
+  return {
+    ...item,
+    id: item.id,
+    row_id: `consolidado-riesgo-${item.id}`,
+    source: "consolidado-riesgo",
+    tipo: "PERSONA",
+    tipo_consulta: "Econfia Consolidado",
+    cedula: item.cedula || "",
+    nombre: item.nombre_completo || "",
+    fecha: item.created_at || item.updated_at || null,
+    consulta_original_id: item.id,
+  };
+}
+
 // ── Empresa RUES ───────────────────────────────────────────────────────────
 
 export function isAssetSearchConsulta(item) {
