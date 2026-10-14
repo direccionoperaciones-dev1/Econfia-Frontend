@@ -82,7 +82,7 @@ if (hasPlanes) {
     consultaItems.push({ path: "/7f3a9e2b", icon: <ZapIcon size={26} />, label: "E-Fast", color: "yellow" });
   }
   if (planes.includes("consolidado-riesgo") || planes.includes("econfiafast") || isAdmin) {
-    consultaItems.push({ path: "/consolidado-riesgo", icon: <ShieldCheck size={27} />, label: "E-Consolidado", color: "cyan" });
+    consultaItems.push({ path: "/consolidado-riesgo", icon: <ShieldCheck size={27} />, label: "E-Integrity 360", color: "cyan" });
   }
   if (planes.includes("essencial-express")) {
     consultaItems.push({ path: "/a1e6c4b8", icon: <CursorClickIcon size ={26} />, label: "E-Essential Express", color: "pink" });
@@ -173,7 +173,7 @@ else if (user?.perfil?.es_admin_organizacion) {
     "Empresa RUES": "Información empresarial confiable",
     "Econfia Asset Search": "Matrículas y direcciones registradas",
     "E-Fast": "Validación instantánea de documentos",
-    "E-Consolidado": "Expediente vigente e histórico",
+    "E-Integrity 360": "Expediente integral vigente e histórico",
     "E-Essencial Express": "Consultas por número de documento",
     "Validación de títulos": "Verificación académica",
     "E-Identidad": "Verificación de identidad",

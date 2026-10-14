@@ -97,7 +97,7 @@ export function normalizeReconocerConsulta(item) {
   };
 }
 
-// ── Econfia Consolidado ─────────────────────────────────────────────────────
+// ── Econfia Integrity 360 ─────────────────────────────────────────────────────
 
 export function isConsolidadoConsulta(item) {
   return String(item?.source || "").trim().toLowerCase() === "consolidado-riesgo";
@@ -110,7 +110,7 @@ export function normalizeConsolidadoConsulta(item) {
     row_id: `consolidado-riesgo-${item.id}`,
     source: "consolidado-riesgo",
     tipo: "PERSONA",
-    tipo_consulta: "Econfia Consolidado",
+    tipo_consulta: "Econfia Integrity 360",
     cedula: item.cedula || "",
     nombre: item.nombre_completo || "",
     fecha: item.created_at || item.updated_at || null,

@@ -269,7 +269,10 @@ export default function TablaResultados({
   const datosPagina = data.slice(startIndex, startIndex + porPagina);
 
   const enProcesoCards = useMemo(() => {
-    const enProceso = data.filter(i => (i.estado || "").toLowerCase() === "en_proceso");
+    // Integrity 360 muestra su propio avance dentro del detalle; no va al aviso flotante.
+    const enProceso = data.filter(
+      i => (i.estado || "").toLowerCase() === "en_proceso" && i.source !== "consolidado-riesgo"
+    );
     const map = new Map();
     for (const it of enProceso) {
       const persona =
@@ -389,7 +392,8 @@ export default function TablaResultados({
                 const estado = (item.estado || "").toLowerCase();
                 const isProcessing = estado === "en_proceso";
                 const isDone = estado === "completado"
-                  || (item.source === "inmuebles-snr" && estado === "sin_resultados");
+                  || (item.source === "inmuebles-snr" && estado === "sin_resultados")
+                  || item.source === "consolidado-riesgo";
                 const start = startsRef.current.get(item.row_id || item.id) ?? now;
                 const percent = percentFrom(start, now, item.tipo_consulta);
 

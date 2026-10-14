@@ -9,7 +9,7 @@ const PLAN_NAMES = [
   ["ecorefull", "E-corefull"], ["empresa", "Empresa"],
   ["inmuebles-snr", "Econfia Asset Search"], ["basic-element", "Basic Element"],
   ["econfiafast", "EconfiaFast"], ["essencial-express", "Essencial Express"],
-  ["consolidado-riesgo", "Econfia Consolidado"],
+  ["consolidado-riesgo", "Econfia Integrity 360"],
   ["validacion-titulos", "Validación de títulos universitarios"],
   ["econfia-titulos", "Econfia Títulos"], ["e-identidad", "E-Identidad"],
   ["experian", "Econfia Adjudicator"], ["wallet", "Econfia Wallet"],

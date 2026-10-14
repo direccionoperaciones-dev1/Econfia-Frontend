@@ -5,10 +5,17 @@ import {
   Clock3,
   Database,
   History,
+  Eye,
   RefreshCw,
   ShieldCheck,
+  X,
 } from "lucide-react";
 
+import DetalleResultados from "../components/DetalleResultados";
+import ExperianDetalleResultados from "../components/ExperianDetalleResultados";
+import HdcDetalleResultados from "../components/HdcDetalleResultados";
+import ReconocerDetalleResultados from "../components/ReconocerDetalleResultados";
+import { AssetSearchResultados } from "./ConsultaInmueblesSNR";
 import LogoOrganizacion from "../components/LogoOrganizacion";
 import Terminos from "../components/Terminos";
 import Toast from "../components/Toast";
@@ -25,7 +32,7 @@ function fecha(value) {
 }
 
 const ACCIONES = {
-  reutilizado: { label: "Reutilizado (sin costo)", className: "bg-sky-500/10 text-sky-400" },
+  reutilizado: { label: "Reutilizado", className: "bg-sky-500/10 text-sky-400" },
   consultando: { label: "Consultando ahora", className: "bg-cyan-500/10 text-cyan-400" },
   consultado: { label: "Consultado ahora", className: "bg-emerald-500/10 text-emerald-400" },
   sin_plan: { label: "Plan no activo", className: "bg-slate-500/15 text-muted" },
@@ -35,7 +42,103 @@ const ACCIONES = {
   error: { label: "Error", className: "bg-red-500/10 text-red-400" },
 };
 
-function FuenteCard({ fuente }) {
+// Productos cuyo resultado completo se puede abrir desde la tarjeta.
+const CON_DETALLE = new Set(["fast", "experian", "hdc", "reconocer", "inmuebles", "titulos", "identidad"]);
+
+function AssetSearchDetalle({ consultaId }) {
+  const API_URL = process.env.REACT_APP_API_URL;
+  const [consulta, setConsulta] = useState(null);
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let activo = true;
+    const token = localStorage.getItem("token");
+    fetch(`${API_URL}/api/inmuebles-snr/${consultaId}/`, { headers: { Authorization: `Token ${token}` } })
+      .then(async (response) => {
+        const payload = await response.json();
+        if (!activo) return;
+        if (response.ok) setConsulta(payload);
+        else setError(payload.error || `Error HTTP: ${response.status}`);
+      })
+      .catch(() => activo && setError("No fue posible cargar el resultado."));
+    return () => { activo = false; };
+  }, [API_URL, consultaId]);
+  if (error) return <p className="text-sm text-red-400">{error}</p>;
+  if (!consulta) return <p className="text-sm text-muted">Cargando...</p>;
+  return <AssetSearchResultados consulta={consulta} />;
+}
+
+function DetalleProducto({ fuente }) {
+  const resumen = fuente.resumen || {};
+  switch (fuente.clave) {
+    case "fast":
+      return <DetalleResultados consultaId={fuente.consulta_id} />;
+    case "experian":
+      return <ExperianDetalleResultados consultaId={fuente.consulta_id} />;
+    case "hdc":
+      return <HdcDetalleResultados consultaId={fuente.consulta_id} />;
+    case "reconocer":
+      return <ReconocerDetalleResultados consultaId={fuente.consulta_id} />;
+    case "inmuebles":
+      return <AssetSearchDetalle consultaId={fuente.consulta_id} />;
+    case "titulos":
+      return (
+        <div className="space-y-3">
+          {(resumen.resultados || []).map((item, index) => (
+            <article key={`${item.fuente}-${index}`} className="rounded-2xl border border-line/10 bg-surface-2/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-bold">{item.fuente}</p>
+                <span className="text-xs text-muted">{item.estado}</span>
+              </div>
+              <p className="mt-2 whitespace-pre-line text-sm text-content/80">{item.mensaje || "Sin información"}</p>
+            </article>
+          ))}
+          {!(resumen.resultados || []).length && <p className="text-sm text-muted">La consulta de títulos no tiene resultados aún.</p>}
+        </div>
+      );
+    case "identidad":
+      return (
+        <dl className="grid gap-3 sm:grid-cols-2">
+          {[
+            ["Nombre", resumen.nombre_completo],
+            ["Tipo de documento", resumen.tipo_documento],
+            ["Estado del documento", resumen.estado_documento],
+            ["Fecha de expedición", resumen.fecha_expedicion],
+            ["Lugar de expedición", resumen.lugar_expedicion],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-2xl border border-line/10 bg-surface-2/60 p-4">
+              <dt className="text-[11px] uppercase tracking-wider text-muted">{label}</dt>
+              <dd className="mt-1 text-sm font-semibold">{value || "—"}</dd>
+            </div>
+          ))}
+        </dl>
+      );
+    default:
+      return null;
+  }
+}
+
+function DetalleModal({ fuente, onClose }) {
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-3xl border border-line/15 bg-surface shadow-2xl"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="flex items-center justify-between gap-3 border-b border-line/10 px-5 py-3">
+          <p className="font-black">{fuente.producto}</p>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-muted hover:bg-surface-2 hover:text-content" aria-label="Cerrar">
+            <X size={18} />
+          </button>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 md:p-5">
+          <DetalleProducto fuente={fuente} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FuenteCard({ fuente, onVer }) {
   const accion = ACCIONES[fuente.accion];
   const consultando = fuente.accion === "consultando";
   const titulos = fuente.clave === "titulos" ? fuente.resumen?.titulos_encontrados || [] : [];
@@ -79,6 +182,16 @@ function FuenteCard({ fuente }) {
       {fuente.vigente_hasta && (
         <p className="mt-3 text-[11px] text-muted">Vigencia: {fecha(fuente.vigente_hasta)}</p>
       )}
+      {fuente.disponible && !consultando && CON_DETALLE.has(fuente.clave)
+        && (fuente.consulta_id || fuente.clave === "identidad") && (
+        <button
+          type="button"
+          onClick={() => onVer(fuente)}
+          className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-1.5 text-xs font-bold text-cyan-300 hover:bg-cyan-400/20"
+        >
+          <Eye size={14} /> Ver resultado
+        </button>
+      )}
     </article>
   );
 }
@@ -108,8 +221,10 @@ export function ConsolidadoVista({ data }) {
       : categoria === "medio" ? "text-amber-400 border-amber-500/40 bg-amber-500/10"
         : categoria === "bajo" ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
           : "text-muted border-line/20 bg-surface-2/60";
+  const [fuenteAbierta, setFuenteAbierta] = useState(null);
   return (
     <div className="space-y-6">
+      {fuenteAbierta && <DetalleModal fuente={fuenteAbierta} onClose={() => setFuenteAbierta(null)} />}
       <section className="grid gap-4 md:grid-cols-[1fr_230px]">
         <div className="rounded-3xl border border-line/15 bg-surface/75 p-6 backdrop-blur-xl">
           <p className="text-xs font-bold uppercase tracking-[.2em] text-cyan-400">Persona consultada</p>
@@ -129,9 +244,11 @@ export function ConsolidadoVista({ data }) {
 
       <section>
         <h3 className="mb-3 flex items-center gap-2 text-lg font-black"><Database size={19} className="text-cyan-400" /> Último dato por producto</h3>
-        <p className="-mt-2 mb-3 text-xs text-muted">Si el dato sigue vigente se reutiliza sin costo; si venció, se consulta solo con el plan activo y se descuenta de la bolsa de ese producto.</p>
+        <p className="-mt-2 mb-3 text-xs text-muted">Si el dato sigue vigente se reutiliza; si venció, se consulta solo con el plan activo y se descuenta de la bolsa de ese producto.</p>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {(data.fuentes || []).map((fuente) => <FuenteCard key={fuente.clave || fuente.producto} fuente={fuente} />)}
+          {(data.fuentes || []).map((fuente) => (
+            <FuenteCard key={fuente.clave || fuente.producto} fuente={fuente} onVer={setFuenteAbierta} />
+          ))}
         </div>
       </section>
 
@@ -217,6 +334,44 @@ export function ConsolidadoDetalle({ consultaId }) {
   }
   return <ConsolidadoVista data={data} />;
 }
+
+function HistorialIntegrity({ apiUrl, recarga, activoId, onAbrir }) {
+  const [items, setItems] = useState([]);
+  useEffect(() => {
+    let activo = true;
+    const token = localStorage.getItem("token");
+    fetch(`${apiUrl}/api/consolidado-riesgo/consultas/?limit=20`, { headers: { Authorization: `Token ${token}` } })
+      .then((response) => (response.ok ? response.json() : { consultas: [] }))
+      .then((payload) => activo && setItems(payload.consultas || []))
+      .catch(() => {});
+    return () => { activo = false; };
+  }, [apiUrl, recarga]);
+
+  if (!items.length) return null;
+  return (
+    <section className="rounded-3xl border border-line/15 bg-surface/75 p-5 backdrop-blur-xl">
+      <h3 className="flex items-center gap-2 text-lg font-black"><History size={19} className="text-cyan-400" /> Consultas anteriores</h3>
+      <div className="mt-4 divide-y divide-line/10">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onAbrir(item.id)}
+            className={`flex w-full flex-wrap items-center justify-between gap-2 px-2 py-2.5 text-left text-sm hover:bg-surface-2/60 ${item.id === activoId ? "bg-cyan-400/10" : ""}`}
+          >
+            <span className="font-semibold">{item.nombre_completo || "Sin nombre"} <span className="font-normal text-muted">· {item.cedula}</span></span>
+            <span className="flex items-center gap-3 text-xs text-muted">
+              <span className="uppercase">{item.estado === "en_proceso" ? "En proceso" : `Riesgo ${item.score_actual || "—"}`}</span>
+              {fecha(item.created_at)}
+              <Eye size={14} />
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export default function ConsultaConsolidadoRiesgo() {
   const API_URL = process.env.REACT_APP_API_URL;
   const [tipoDoc, setTipoDoc] = useState("CC");
@@ -228,6 +383,21 @@ export default function ConsultaConsolidadoRiesgo() {
   const [toast, setToast] = useState(null);
 
   useConsolidadoPolling(API_URL, data, setData);
+
+  const abrirAnterior = async (id) => {
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(`${API_URL}/api/consolidado-riesgo/consultas/${id}/`, {
+        headers: { Authorization: `Token ${token}` },
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || payload.detail);
+      setData(payload);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (error) {
+      setToast({ type: "error", message: error.message || "No fue posible abrir la consulta." });
+    }
+  };
 
   const consultar = async (event) => {
     event.preventDefault();
@@ -264,11 +434,11 @@ export default function ConsultaConsolidadoRiesgo() {
         <header className="grid gap-5 lg:grid-cols-[1.2fr_.8fr] lg:items-end">
           <div>
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-400">
-              <ShieldCheck size={15} /> Expediente consolidado
+              <ShieldCheck size={15} /> Expediente integral
             </div>
-            <h1 className="text-3xl font-black tracking-tight md:text-5xl">Econfia Consolidado</h1>
+            <h1 className="text-3xl font-black tracking-tight md:text-5xl">Econfia Integrity 360</h1>
             <p className="mt-3 max-w-3xl text-sm leading-relaxed text-muted">
-              Reúne listas, antecedentes, crédito, contacto, identidad y títulos. Los antecedentes
+              Reúne listas, antecedentes, crédito, contacto, identidad, inmuebles y títulos. Los antecedentes
               históricos se conservan como contexto y no modifican la calificación vigente.
             </p>
           </div>
@@ -287,16 +457,17 @@ export default function ConsultaConsolidadoRiesgo() {
             </label>
             <label className="mt-2 flex items-center gap-2 text-xs text-muted">
               <input type="checkbox" checked={consentimiento} onChange={(e) => setConsentimiento(e.target.checked)} className="accent-cyan-500" />
-              Confirmo la autorización del titular (incluye consulta en DataCrédito)
+              Confirmo la autorización del titular (incluye DataCrédito y SNR)
             </label>
             <button disabled={loading || !cedula.trim() || !acepta || !consentimiento} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
               {loading ? <RefreshCw className="animate-spin" size={17} /> : <Database size={17} />}
-              {loading ? "Consolidando..." : "Consultar consolidado"}
+              {loading ? "Consultando..." : "Consultar Integrity 360"}
             </button>
           </form>
         </header>
 
         {data && <ConsolidadoVista data={data} />}
+        <HistorialIntegrity apiUrl={API_URL} recarga={data?.id} activoId={data?.id} onAbrir={abrirAnterior} />
       </div>
       {toast && <Toast type={toast.type} message={toast.message} onClose={() => setToast(null)} />}
     </section>
