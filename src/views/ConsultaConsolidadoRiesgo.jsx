@@ -6,6 +6,7 @@ import {
   Database,
   History,
   Eye,
+  FileDown,
   RefreshCw,
   ShieldCheck,
   X,
@@ -222,6 +223,35 @@ export function ConsolidadoVista({ data }) {
         : categoria === "bajo" ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
           : "text-muted border-line/20 bg-surface-2/60";
   const [fuenteAbierta, setFuenteAbierta] = useState(null);
+  const [descargando, setDescargando] = useState(false);
+  const [errorPdf, setErrorPdf] = useState("");
+
+  // El PDF se arma completo en el backend (resumen + informes de cada producto).
+  const descargarPdf = async () => {
+    setDescargando(true);
+    setErrorPdf("");
+    try {
+      const token = localStorage.getItem("token");
+      const response = await fetch(
+        `${process.env.REACT_APP_API_URL}/api/consolidado-riesgo/consultas/${data.id}/pdf/`,
+        { headers: { Authorization: `Token ${token}` } }
+      );
+      if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = `econfia-integrity-360-${data.persona.cedula}-${data.id}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(link.href);
+    } catch (error) {
+      setErrorPdf("No fue posible generar el PDF. Intenta de nuevo.");
+    } finally {
+      setDescargando(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {fuenteAbierta && <DetalleModal fuente={fuenteAbierta} onClose={() => setFuenteAbierta(null)} />}
@@ -230,6 +260,17 @@ export function ConsolidadoVista({ data }) {
           <p className="text-xs font-bold uppercase tracking-[.2em] text-cyan-400">Persona consultada</p>
           <h2 className="mt-2 text-2xl font-black">{data.persona.nombre_completo || "Identidad pendiente"}</h2>
           <p className="mt-1 text-sm text-muted">{data.persona.tipo_doc} · {data.persona.cedula}</p>
+          <button
+            type="button"
+            onClick={descargarPdf}
+            disabled={descargando || data.estado === "en_proceso"}
+            title={data.estado === "en_proceso" ? "Disponible cuando terminen las consultas" : "Descargar informe completo"}
+            className="mt-4 inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {descargando ? <RefreshCw className="animate-spin" size={16} /> : <FileDown size={16} />}
+            {descargando ? "Generando PDF..." : "Descargar PDF"}
+          </button>
+          {errorPdf && <p className="mt-2 text-xs text-red-400">{errorPdf}</p>}
           {data.estado === "en_proceso" && (
             <p className="mt-4 flex items-center gap-2 text-xs text-sky-400"><RefreshCw className="animate-spin" size={14} /> Consultando productos vencidos en segundo plano</p>
           )}
