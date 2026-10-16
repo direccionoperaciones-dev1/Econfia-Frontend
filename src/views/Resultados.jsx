@@ -121,9 +121,11 @@ function FloatingActionsPortal({
   const tipoConsultaNormalizado = (consultaTipo || "").toLowerCase();
   const isEconfiafast = tipoConsultaNormalizado === "econfiafast";
   const isExperian = consultaSource === "experian" || tipoConsultaNormalizado === "experian";
-  // Corefull: el PDF se pre-genera en segundo plano. Bloquear la descarga hasta
-  // que esté listo (pdfReady). Experian y Fast tienen su propio flujo.
-  const pdfBloqueado = !isExperian && !isEconfiafast && !pdfReady;
+  // SOLO corefull (ecorefull) pre-genera el PDF en segundo plano, así que SOLO
+  // ahí se bloquea la descarga hasta que esté listo. Las demás (essencial, basic,
+  // single-source…) generan el PDF on-demand al clic → NO se bloquean.
+  const isCorefull = tipoConsultaNormalizado === "ecorefull";
+  const pdfBloqueado = isCorefull && !pdfReady;
 
   const downloadPdf = async (tipo) => {
     setDownloading(true);
