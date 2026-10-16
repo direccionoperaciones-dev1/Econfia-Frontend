@@ -53,6 +53,7 @@ import ConsultaEmpresa from "./views/ConsultaEmpresa";
 import ConsultaInmueblesSNR from "./views/ConsultaInmueblesSNR";
 import ConsultaFask from "./views/ConsultaFask";
 import ConsultaEssencialExpress from "./views/ConsultaEssencialExpress";
+import GestionEmpresa from "./views/GestionEmpresa";
 import ConsultaExperian from "./views/ConsultaExperian";
 import ConsultaHistoriaCredito from "./views/ConsultaHistoriaCredito";
 import ConsultaReconocer from "./views/ConsultaReconocer";
@@ -419,7 +420,8 @@ function Home() {
     { label: "Empresas y RUES", href: "/4a7e2b8f", Icon: Building2 },
     { label: "Econfia Asset Search", href: "/inmuebles-snr", Icon: Landmark },
     { label: "Validación de títulos", href: "/2b7d5e9c", Icon: GraduationCap },
-    { label: "Consulta Express", href: "/a1e6c4b8", Icon: Sparkles },
+    // Essencial Express retirado de la interfaz (backend queda disponible, sin exponer).
+    // { label: "Consulta Express", href: "/a1e6c4b8", Icon: Sparkles },
     { label: "Planes y precios", href: "/precios", Icon: CreditCard },
   ];
 
@@ -802,6 +804,7 @@ export default function App() {
 
             {/* Protegidas */}
             <Route element={<PrivateRoute><Dashboard /></PrivateRoute>}>
+              <Route path="/empresa-gestion"   element={<GestionEmpresa />}           />
               <Route path="/3c8f1a2e"          element={<Consulta />}                />
               <Route path="/consulta"           element={<Consulta />}                />
               <Route path="/a1e6c4b8"          element={<ConsultaEssencialExpress />} />

@@ -1,10 +1,9 @@
 // src/views/ConsultaSlide.jsx
 // Muestra los RESULTADOS como un INFORME elegante (estilo AML/HUD oscuro), a
 // pantalla completa, armado por nosotros con los datos reales (NO es el PDF).
-// Incluye botón "Descargar PDF" (ese sí genera/descarga el archivo real) + QR y
-// link de verificación. El otro slide (resultados individuales) NO se toca.
+// Incluye QR y link de verificación. El otro slide (resultados individuales) NO se toca.
 import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, FileDown } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import { buildInformeHtml } from "./informeHtml";
 
 const API_URL = process.env.REACT_APP_API_URL;
@@ -21,9 +20,6 @@ const ConsultaSlide = ({ consultaId, consulta: consultaProp }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [html, setHtml] = useState("");
-  const [tipoConsulta, setTipoConsulta] = useState("");
-
-  const esFull = (tipoConsulta || consultaProp?.tipo_consulta || "").toLowerCase() === "ecorefull";
 
   // QR (endpoint backend) + link público de verificación.
   const qrUrl = `${API_URL}/api/qr/${consultaId}/`;
@@ -55,7 +51,6 @@ const ConsultaSlide = ({ consultaId, consulta: consultaProp }) => {
         };
 
         const consulta = (await okJson(consultaRes)) || consultaProp || {};
-        setTipoConsulta(consulta?.tipo_consulta || consultaProp?.tipo_consulta || "");
         const riesgo = await okJson(riesgoRes);
         const resultadosData = await okJson(resultadosRes);
         const resultados = Array.isArray(resultadosData)
@@ -78,27 +73,8 @@ const ConsultaSlide = ({ consultaId, consulta: consultaProp }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [consultaId, consultaProp?.tipo_consulta]);
 
-  const descargarPdf = () => {
-    // Full → PDF completo (tipo 1); Fast/Essencial → resumen (tipo 3).
-    const tipo = esFull ? 1 : 3;
-    window.open(`${API_URL}/api/generar_consolidado_full/${consultaId}/${tipo}/`, "_blank", "noopener,noreferrer");
-  };
-
   return (
     <div className="relative w-full h-full min-h-[72vh] bg-[#050914]">
-      {/* Botón flotante Descargar PDF */}
-      {!loading && !error && (
-        <button
-          onClick={descargarPdf}
-          className="absolute top-3 right-4 z-20 inline-flex items-center gap-2 px-3.5 py-2 rounded-lg
-                     bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-400/40
-                     font-semibold text-xs backdrop-blur-md shadow-lg transition hover:scale-105"
-          title="Descargar el PDF del informe"
-        >
-          <FileDown size={15} /> Descargar PDF
-        </button>
-      )}
-
       {loading ? (
         <Loader />
       ) : error ? (

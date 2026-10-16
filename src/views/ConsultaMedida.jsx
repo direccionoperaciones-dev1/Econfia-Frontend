@@ -8,10 +8,15 @@ import Terminos from "../components/Terminos";
 import ConsultaMasivaModal from "../components/ConsultaMasivaModal";
 import LotesFuentes from "../components/LotesFuentes";
 
+// El cliente pidió administrar el modo únicamente desde el control global.
+// Se conserva el selector por fuente detrás de esta bandera para poder
+// reactivarlo sin recuperar lógica eliminada.
+const MOSTRAR_SELECTOR_MODO_POR_FUENTE = false;
 
 function ModalConsultaMedida({ isOpen, onClose, data, onSuccess, puedeUsarLotes }) {
   const [fuentes, setFuentes] = useState([]);
   const [seleccionadas, setSeleccionadas] = useState([]);
+  const [modos, setModos] = useState({}); // { [clave]: 'captura' | 'sin_captura' }
   const [loading, setLoading] = useState(false);
   const [query, setQuery] = useState(""); // filtro de texto
   const [toast, setToast] = useState(null); // NUEVO: para mostrar errores
@@ -24,21 +29,54 @@ function ModalConsultaMedida({ isOpen, onClose, data, onSuccess, puedeUsarLotes 
     return f?.nombre_pila || f?.nombre || nombre;
   };
 
-  // Cargar fuentes al abrir modal
+  // --- Modo por fuente: con evidencia (captura) o sin evidencia (sin_captura) ---
+  const dispoDe = (nombre) => fuentes.find((x) => x.nombre === nombre) || {};
+  const modoDefault = (nombre) => {
+    const f = dispoDe(nombre);
+    if (f.disponible_captura) return "captura"; // por defecto CON evidencia
+    if (f.disponible_sin_captura) return "sin_captura";
+    return "captura";
+  };
+  const modoDe = (nombre) => modos[nombre] || modoDefault(nombre);
+  const setModo = (nombre, modo) => setModos((prev) => ({ ...prev, [nombre]: modo }));
+  // Aplica un modo a todas las fuentes seleccionadas que lo soporten
+  const setModoTodas = (modo) =>
+    setModos((prev) => {
+      const next = { ...prev };
+      seleccionadas.forEach((n) => {
+        const f = dispoDe(n);
+        if (modo === "captura" && f.disponible_captura) next[n] = "captura";
+        if (modo === "sin_captura" && f.disponible_sin_captura) next[n] = "sin_captura";
+      });
+      return next;
+    });
+  const todasEnModo = (modo) => seleccionadas.length > 0 && seleccionadas.every((nombre) => modoDe(nombre) === modo);
+
+  // Cargar catálogo de fuentes (con disponibilidad por modo) al abrir modal
   useEffect(() => {
     if (!isOpen) return;
 
     const fetchFuentes = async () => {
       try {
         const token = localStorage.getItem("token"); // Obtener token
-        const res = await fetch(`${API_URL}/api/fuentes/`, {
+        const res = await fetch(`${API_URL}/api/essencial/catalogo-fuentes/`, {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Token ${token}`, // Cabecera de autorización
           },
         });
         const json = await res.json();
-        setFuentes(Array.isArray(json) ? json : []); // seguridad
+        const items = Array.isArray(json?.fuentes) ? json.fuentes : [];
+        // Mapear al shape que usa el modal + disponibilidad de modos
+        setFuentes(
+          items.map((f) => ({
+            id: f.clave,
+            nombre: f.clave,
+            nombre_pila: f.nombre,
+            disponible_captura: !!f.disponible_captura,
+            disponible_sin_captura: !!f.disponible_sin_captura,
+          }))
+        );
       } catch (err) {
         console.error("Error cargando fuentes:", err);
         setFuentes([]);
@@ -89,6 +127,8 @@ function ModalConsultaMedida({ isOpen, onClose, data, onSuccess, puedeUsarLotes 
       if (prev.includes(nombre)) {
         return prev.filter((n) => n !== nombre);
       }
+      // Al seleccionar, fijar el modo por defecto si no tiene uno
+      setModos((m) => (m[nombre] ? m : { ...m, [nombre]: modoDefault(nombre) }));
       return [...prev, nombre];
     });
   };
@@ -103,6 +143,11 @@ function ModalConsultaMedida({ isOpen, onClose, data, onSuccess, puedeUsarLotes 
         tipo_doc: data.tipo_doc,
         tipo_consulta: "essencial",
         lista_nombres: seleccionadas,
+        // Cada fuente con su modo elegido: con evidencia (captura) o sin evidencia.
+        // Solo se envían las claves presentes en el catálogo (evita rechazos del backend).
+        fuentes_configuracion: seleccionadas
+          .filter((n) => fuentes.some((f) => f.nombre === n))
+          .map((n) => ({ clave: n, modo: modoDe(n) })),
       };
       if (data.fecha_expedicion) {
         bodyPayload.fecha_expedicion = data.fecha_expedicion;
@@ -287,6 +332,33 @@ function ModalConsultaMedida({ isOpen, onClose, data, onSuccess, puedeUsarLotes 
               )}
             </div>
 
+            {/* Control global de evidencia para todas las seleccionadas */}
+            {seleccionadas.length > 0 && (
+              <div className="mb-2 flex items-center justify-between gap-2 rounded-lg bg-surface-2/50 border border-line/15 px-3 py-2">
+                <span className="text-[11px] text-muted">Aplicar a todas las seleccionadas:</span>
+                <div className="inline-flex items-center rounded-full bg-surface/70 border border-line/20 p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setModoTodas("captura")}
+                    className={`px-3 py-1 rounded-full text-[10px] font-semibold transition-all ${
+                      todasEnModo("captura") ? "bg-brand text-white shadow-sm shadow-brand/30" : "text-content hover:bg-brand/15"
+                    }`}
+                  >
+                    Todas con evidencia
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModoTodas("sin_captura")}
+                    className={`px-3 py-1 rounded-full text-[10px] font-semibold transition-all ${
+                      todasEnModo("sin_captura") ? "bg-brand text-white shadow-sm shadow-brand/30" : "text-content hover:bg-brand/15"
+                    }`}
+                  >
+                    Todas sin evidencia
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Lista de fuentes (altura natural; el scroll lo maneja la zona central) */}
             <div className="space-y-2 mb-2">
               {filteredFuentes.length > 0 ? (
@@ -308,9 +380,51 @@ function ModalConsultaMedida({ isOpen, onClose, data, onSuccess, puedeUsarLotes 
                       onChange={() => handleCheckbox(fuente.nombre)}
                       disabled={isDisabled}
                     />
-                    <div className="flex flex-col">
-                      <span className="font-medium text-content group-hover:text-brand transition-colors">{fuente.nombre_pila || fuente.nombre}</span>
+                    <div className="flex flex-col flex-1 min-w-0">
+                      <span className="font-medium text-content group-hover:text-brand transition-colors truncate">{fuente.nombre_pila || fuente.nombre}</span>
                     </div>
+                    {/* Toggle por fuente: con evidencia / sin evidencia (segmentado) */}
+                    {MOSTRAR_SELECTOR_MODO_POR_FUENTE && seleccionadas.includes(fuente.nombre) && (
+                      <div
+                        className="flex items-center ml-auto flex-shrink-0"
+                        onClick={(e) => e.preventDefault()}
+                      >
+                        <div className="inline-flex items-center rounded-full bg-surface/70 border border-line/20 p-0.5 shadow-inner">
+                          <button
+                            type="button"
+                            title={fuente.disponible_captura ? "Incluye captura/evidencia en el PDF" : "No disponible con evidencia"}
+                            disabled={!fuente.disponible_captura}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setModo(fuente.nombre, "captura"); }}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all ${
+                              modoDe(fuente.nombre) === "captura"
+                                ? "bg-brand text-white shadow-sm shadow-brand/40"
+                                : "text-muted hover:text-content"
+                            } ${!fuente.disponible_captura ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}`}
+                          >
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+                            </svg>
+                            Evidencia
+                          </button>
+                          <button
+                            type="button"
+                            title={fuente.disponible_sin_captura ? "Más rápido, sin captura" : "No disponible sin evidencia"}
+                            disabled={!fuente.disponible_sin_captura}
+                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); setModo(fuente.nombre, "sin_captura"); }}
+                            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-semibold transition-all ${
+                              modoDe(fuente.nombre) === "sin_captura"
+                                ? "bg-brand text-white shadow-sm shadow-brand/40"
+                                : "text-muted hover:text-content"
+                            } ${!fuente.disponible_sin_captura ? "opacity-30 cursor-not-allowed" : "cursor-pointer"}`}
+                          >
+                            <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" />
+                            </svg>
+                            Sin
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </label>
                   );
                 })

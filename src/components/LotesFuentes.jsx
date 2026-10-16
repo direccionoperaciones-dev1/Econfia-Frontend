@@ -31,6 +31,7 @@ export default function LotesFuentes({
   const [loteId, setLoteId] = useState("");
   const [nuevoNombre, setNuevoNombre] = useState("");
   const [busy, setBusy] = useState(false);
+  const [abierto, setAbierto] = useState(false); // panel colapsado por defecto
 
   const authHeaders = useCallback(() => {
     const token = localStorage.getItem("token");
@@ -198,14 +199,38 @@ export default function LotesFuentes({
     "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed";
 
   return (
-    <div className="mb-3 rounded-xl border border-purple-500/25 bg-purple-500/5 p-3">
-      <div className="flex items-center gap-2 mb-2">
-        <svg className="w-4 h-4 text-purple-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6L12 2z" />
-        </svg>
-        <span className="text-purple-200 font-semibold text-sm">Lotes de fuentes guardados</span>
-      </div>
+    <div className="mb-3 rounded-xl border border-purple-500/25 bg-purple-500/5">
+      <button
+        type="button"
+        onClick={() => setAbierto((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left"
+      >
+        <span className="flex items-center gap-2">
+          <svg className="w-4 h-4 text-purple-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2l2.4 7.4H22l-6 4.6 2.3 7.4L12 17l-6.3 4.4L8 14 2 9.4h7.6L12 2z" />
+          </svg>
+          <span className="text-purple-200 font-semibold text-sm">Lotes de fuentes guardados</span>
+          {lotes.length > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-purple-500/25 text-purple-200 text-[11px] font-bold">
+              {lotes.length}
+            </span>
+          )}
+        </span>
+        <span className="flex items-center gap-2">
+          <span className="text-[11px] text-purple-200/60 hidden sm:inline">
+            {abierto ? "Ocultar" : "Mostrar"}
+          </span>
+          <svg
+            className={`w-4 h-4 text-purple-300 transition-transform duration-300 ${abierto ? "rotate-180" : ""}`}
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+          >
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </span>
+      </button>
 
+      {abierto && (
+      <div className="px-3 pb-3">
       {/* Aplicar / gestionar un lote existente */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-2 mb-2">
         <select
@@ -261,6 +286,8 @@ export default function LotesFuentes({
           Guardar selección ({seleccionadas.length})
         </button>
       </div>
+      </div>
+      )}
     </div>
   );
 }

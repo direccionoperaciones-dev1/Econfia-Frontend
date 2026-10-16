@@ -84,9 +84,10 @@ if (hasPlanes) {
   if (planes.includes("consolidado-riesgo") || planes.includes("econfiafast") || isAdmin) {
     consultaItems.push({ path: "/consolidado-riesgo", icon: <ShieldCheck size={27} />, label: "E-Integrity 360", color: "cyan" });
   }
-  if (planes.includes("essencial-express")) {
-    consultaItems.push({ path: "/a1e6c4b8", icon: <CursorClickIcon size ={26} />, label: "E-Essential Express", color: "pink" });
-  }
+  // Essencial Express retirado de la interfaz (ya no se maneja como plan).
+  // if (planes.includes("essencial-express")) {
+  //   consultaItems.push({ path: "/a1e6c4b8", icon: <CursorClickIcon size ={26} />, label: "E-Essential Express", color: "pink" });
+  // }
   if(planes.includes("validacion-titulos")){
   consultaItems.push({ path: "/2b7d5e9c", icon: <img src={UserCogIcon} alt="Validación de títulos" />, label: "Validación de títulos", color: "indigo" });
   }
@@ -139,6 +140,7 @@ if (isAdmin) {
 // panel de Wallet, donde solo verá la pestaña de Esquemas de credenciales.
 else if (user?.perfil?.es_admin_organizacion) {
   menuItems.push({ path: "/3f8a1e6d", icon: <WalletIcon size={16} strokeWidth={1.75} />, label: "Esquemas Wallet", color: "emerald" });
+  menuItems.push({ path: "/empresa-gestion", icon: <User size={16} strokeWidth={1.75} />, label: "Gestión Empresa", color: "blue" });
 }
 
   const navigate = useNavigate();

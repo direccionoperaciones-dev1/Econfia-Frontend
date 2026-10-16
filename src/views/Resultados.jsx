@@ -19,7 +19,7 @@ import "swiper/css/pagination";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
-import { ArrowLeft, FileDown, FileText, Images, Eye, ChevronDown } from "lucide-react";
+import { ArrowLeft, FileDown, FileText, Images, Eye } from "lucide-react";
 import {
   isExperianConsulta,
   normalizeExperianConsulta,
@@ -87,6 +87,7 @@ function FloatingActionsPortal({
   onBack,
   onOpenIndividual, // abre tu ModalDescargaIndividual
   onVerPdf, // lleva al slide del informe tipo PDF
+  pdfReady = true, // corefull: el PDF se genera async; el botón se habilita cuando está listo
 }) {
   const [el, setEl] = useState(null);
   const [open, setOpen] = useState(false);
@@ -120,6 +121,9 @@ function FloatingActionsPortal({
   const tipoConsultaNormalizado = (consultaTipo || "").toLowerCase();
   const isEconfiafast = tipoConsultaNormalizado === "econfiafast";
   const isExperian = consultaSource === "experian" || tipoConsultaNormalizado === "experian";
+  // Corefull: el PDF se pre-genera en segundo plano. Bloquear la descarga hasta
+  // que esté listo (pdfReady). Experian y Fast tienen su propio flujo.
+  const pdfBloqueado = !isExperian && !isEconfiafast && !pdfReady;
 
   const downloadPdf = async (tipo) => {
     setDownloading(true);
@@ -263,34 +267,41 @@ function FloatingActionsPortal({
           </>
         ) : (
           <div className="relative" ref={menuRef}>
-            {/* Split: "Ver PDF" (lleva al informe) + caret (opciones de descarga) */}
-            <div className="flex items-center">
+            {/* Acciones separadas y explícitas: abrir el informe o descargarlo. */}
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => onVerPdf?.()}
-                className="flex items-center gap-2 px-3 py-2 rounded-l-lg bg-gradient-to-r from-brand to-brand-2 hover:opacity-90
-                           text-white border border-white/20 backdrop-blur-xl shadow-lg shadow-brand/30 transition-all hover:shadow-brand/50 hover:scale-105"
-                title="Ver informe"
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-brand to-brand-2 hover:opacity-90
+                           text-white border border-white/20 backdrop-blur-xl shadow-lg shadow-brand/30 transition-all hover:shadow-brand/50"
+                title="Abrir informe PDF"
               >
                 <Eye size={16} />
-                <span className="text-xs sm:text-sm font-semibold">Ver PDF</span>
+                <span className="text-xs sm:text-sm font-semibold">Ver informe</span>
               </button>
               <button
+                type="button"
                 onClick={() => setOpen((v) => !v)}
-                className="flex items-center px-2 py-2 rounded-r-lg bg-gradient-to-r from-brand to-brand-2 hover:opacity-90
-                           text-white border border-l-0 border-white/20 backdrop-blur-xl shadow-lg shadow-brand/30 transition-all hover:shadow-brand/50 disabled:opacity-60 disabled:cursor-not-allowed"
-                title="Opciones de descarga"
-                disabled={downloading}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-surface/90 hover:bg-surface-2/90
+                           text-content border border-line/20 backdrop-blur-xl shadow-lg shadow-black/10 transition-all hover:border-brand/40 disabled:opacity-60 disabled:cursor-not-allowed"
+                title={pdfBloqueado ? "El PDF se está generando, espera unos segundos…" : "Mostrar opciones para descargar el PDF"}
+                aria-label="Descargar informe PDF"
+                aria-haspopup="menu"
+                aria-expanded={open}
+                disabled={downloading || pdfBloqueado}
               >
-                {downloading ? (
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-brand rounded-full animate-spin" />
+                {downloading || pdfBloqueado ? (
+                  <span className="inline-block w-4 h-4 border-2 border-content/30 border-t-brand rounded-full animate-spin" />
                 ) : (
-                  <ChevronDown size={16} />
+                  <FileDown size={16} className="text-brand" />
                 )}
+                <span className="text-xs sm:text-sm font-semibold">
+                  {pdfBloqueado ? "Generando PDF…" : "Descargar"}
+                </span>
               </button>
             </div>
 
             {open && (
-              <div className="absolute left-0 mt-2 w-56 rounded-lg overflow-hidden border border-white/20
+              <div className="absolute right-0 mt-2 w-56 rounded-lg overflow-hidden border border-white/20
                               bg-gradient-to-br from-slate-900/95 via-blue-900/40 to-slate-900/95 backdrop-blur-xl shadow-2xl shadow-brand/20 animate-in fade-in duration-200">
                 {isEconfiafast ? (
                 <button
@@ -1119,6 +1130,12 @@ export default function Resultados() {
               onBack={() => setConsultaSeleccionada(null)}
               onOpenIndividual={() => setShowModalIndividual(true)}
               onVerPdf={() => swiperRef.current?.slideTo(1)}
+              pdfReady={
+                !!(
+                  (data.find((r) => r.id === consultaSeleccionada?.id) ||
+                    consultaSeleccionada)?.pdf_generado
+                )
+              }
             />
           )}
           {isConsolidadoActual ? (

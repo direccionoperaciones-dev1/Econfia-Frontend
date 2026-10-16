@@ -34,6 +34,7 @@ const defaultExpiry = () => {
 };
 const newProposal = () => ({
   plan: "", cliente_nombre: "", cliente_empresa: "", cliente_email: "",
+  moneda: "COP",
   tarifa_origen: "", cantidad: "1", precio_unitario: "", precio_paquete: "",
   descuento_volumen_porcentaje: "0", precio_consulta_adicional: "",
   descuento_porcentaje: "0",
@@ -46,8 +47,17 @@ const emptyRate = () => ({
 const inputClass = "w-full rounded-xl border border-line/20 bg-surface px-3 py-2.5 text-sm text-content outline-none transition placeholder:text-muted/60 focus:border-brand/60";
 const labelClass = "mb-1.5 block text-[11px] font-bold uppercase tracking-[0.13em] text-muted";
 const money = (value, currency = "COP") => new Intl.NumberFormat("es-CO", {
-  style: "currency", currency, maximumFractionDigits: currency === "COP" ? 0 : 2,
+  style: "currency", currency, minimumFractionDigits: 0, maximumFractionDigits: 0,
 }).format(Number(value || 0));
+const convertCurrency = (value, source, target, trm) => {
+  const amount = Number(value || 0);
+  const rate = Number(trm?.valor || 0);
+  if (!amount || source === target) return amount;
+  if (!rate) return amount;
+  if (source === "COP" && target === "USD") return amount / rate;
+  if (source === "USD" && target === "COP") return amount * rate;
+  return amount;
+};
 const tariffReference = (plan) => (plan.tarifas || [])
   .filter((rate) => rate.activo)
   .sort((a, b) => Number(a.cantidad) - Number(b.cantidad))[0] || null;
@@ -81,6 +91,9 @@ export default function AdminPlanes() {
   const [savingRates, setSavingRates] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [trm, setTrm] = useState(null);
+  const [displayCurrency, setDisplayCurrency] = useState("COP");
+  const [rateCurrency, setRateCurrency] = useState("COP");
 
   const api = async (path, options = {}) => {
     const response = await fetch(`${API_URL}${path}`, {
@@ -93,9 +106,12 @@ export default function AdminPlanes() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [plansData, proposalsData] = await Promise.all([api("/api/planes/"), api("/api/propuestas/")]);
+      const [plansData, proposalsData, trmData] = await Promise.all([
+        api("/api/planes/"), api("/api/propuestas/"), api("/api/trm/").catch(() => null),
+      ]);
       setPlanes(Array.isArray(plansData) ? plansData : plansData.results || []);
       setPropuestas(Array.isArray(proposalsData) ? proposalsData : proposalsData.results || []);
+      if (trmData) setTrm(trmData);
     } catch (error) { setToast({ type: "error", message: error.message }); }
     finally { setLoading(false); }
   };
@@ -127,6 +143,15 @@ export default function AdminPlanes() {
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  const changePlanCurrency = (currency) => {
+    const source = planForm.moneda;
+    setPlanForm((current) => ({
+      ...current,
+      moneda: currency,
+      costo: String(Math.round(convertCurrency(current.costo, source, currency, trm))),
+      precio: String(Math.round(convertCurrency(current.precio, source, currency, trm))),
+    }));
+  };
   const deletePlan = async (plan) => {
     if (!window.confirm(`¿Eliminar el plan ${plan.nombre_display || plan.nombre}?`)) return;
     try { await api(`/api/planes/${plan.id}/`, { method: "DELETE" }); setToast({ type: "success", message: "Plan eliminado." }); await loadData(); }
@@ -146,6 +171,7 @@ export default function AdminPlanes() {
 
   const openRates = (plan) => {
     setSelectedPlan(plan);
+    setRateCurrency(displayCurrency === plan.moneda || trm ? displayCurrency : plan.moneda);
     setRateRows((plan.tarifas || []).map((rate) => ({
       ...rate,
       cantidad: String(rate.cantidad),
@@ -157,6 +183,11 @@ export default function AdminPlanes() {
     setShowRates(true);
   };
   const updateRate = (index, field, value) => setRateRows((rows) => rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
+  const updateRateMoney = (index, field, value) => updateRate(
+    index,
+    field,
+    value === "" ? "" : String(Math.round(convertCurrency(value, rateCurrency, selectedPlan?.moneda || "COP", trm) * 100) / 100),
+  );
   const saveRates = async () => {
     setSavingRates(true);
     const tarifas = rateRows.map((rate) => ({
@@ -178,6 +209,7 @@ export default function AdminPlanes() {
     const plan = planes.find((item) => String(item.id) === String(planId));
     setProposalForm((current) => ({
       ...current, plan: planId, tarifa_origen: "", cantidad: "1",
+      moneda: plan?.moneda || "COP",
       precio_unitario: plan ? String(plan.precio || 0) : "", precio_paquete: "",
       descuento_volumen_porcentaje: "0", precio_consulta_adicional: "",
     }));
@@ -186,10 +218,21 @@ export default function AdminPlanes() {
     const rate = (proposalPlan?.tarifas || []).find((item) => String(item.id) === String(rateId));
     setProposalForm((current) => rate ? ({
       ...current, tarifa_origen: rateId, cantidad: String(rate.cantidad),
-      precio_unitario: String(rate.precio_unitario), precio_paquete: String(rate.precio_paquete),
+      precio_unitario: String(convertCurrency(rate.precio_unitario, proposalPlan.moneda, current.moneda, trm)),
+      precio_paquete: String(convertCurrency(rate.precio_paquete, proposalPlan.moneda, current.moneda, trm)),
       descuento_volumen_porcentaje: String(rate.descuento_porcentaje || 0),
-      precio_consulta_adicional: rate.precio_consulta_adicional == null ? "" : String(rate.precio_consulta_adicional),
+      precio_consulta_adicional: rate.precio_consulta_adicional == null ? "" : String(convertCurrency(rate.precio_consulta_adicional, proposalPlan.moneda, current.moneda, trm)),
     }) : ({ ...current, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" }));
+  };
+  const changeProposalCurrency = (currency) => {
+    const source = proposalForm.moneda;
+    setProposalForm((current) => ({
+      ...current,
+      moneda: currency,
+      precio_unitario: String(convertCurrency(current.precio_unitario, source, currency, trm)),
+      precio_paquete: current.precio_paquete === "" ? "" : String(convertCurrency(current.precio_paquete, source, currency, trm)),
+      precio_consulta_adicional: current.precio_consulta_adicional === "" ? "" : String(convertCurrency(current.precio_consulta_adicional, source, currency, trm)),
+    }));
   };
   const resetProposal = () => { setProposalForm(newProposal()); setEditingProposalId(null); };
   const saveProposal = async (event) => {
@@ -213,6 +256,7 @@ export default function AdminPlanes() {
     setEditingProposalId(proposal.id);
     setProposalForm({
       plan: String(proposal.plan), cliente_nombre: proposal.cliente_nombre, cliente_empresa: proposal.cliente_empresa || "",
+      moneda: proposal.moneda || "COP",
       cliente_email: proposal.cliente_email, cantidad: String(proposal.cantidad), precio_unitario: String(proposal.precio_unitario),
       tarifa_origen: proposal.tarifa_origen == null ? "" : String(proposal.tarifa_origen),
       precio_paquete: proposal.precio_paquete == null ? "" : String(proposal.precio_paquete),
@@ -251,9 +295,15 @@ export default function AdminPlanes() {
           <div className="text-[10px] font-bold uppercase tracking-[0.22em] text-brand">Centro comercial administrativo</div>
           <div className="mt-2 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div><h2 className="text-3xl font-black tracking-tight text-content md:text-4xl">Planes y propuestas</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-muted">Administra costos, precios y condiciones comerciales; prepara propuestas y envíalas al cliente desde el mismo lugar.</p></div>
-            <div className="flex gap-2 rounded-2xl bg-surface-2/80 p-1.5">
-              <button onClick={() => setTab("planes")} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${tab === "planes" ? "bg-brand text-white shadow" : "text-muted hover:text-content"}`}>Planes ({planes.length})</button>
-              <button onClick={() => setTab("propuestas")} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${tab === "propuestas" ? "bg-brand text-white shadow" : "text-muted hover:text-content"}`}>Propuestas ({propuestas.length})</button>
+            <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-1 rounded-2xl border border-line/15 bg-surface-2/80 p-1.5">
+                {['COP', 'USD'].map((currency) => <button key={currency} type="button" disabled={currency === 'USD' && !trm} onClick={() => setDisplayCurrency(currency)} className={`rounded-xl px-3 py-2 text-xs font-black transition disabled:cursor-not-allowed disabled:opacity-40 ${displayCurrency === currency ? "bg-emerald-500 text-white shadow" : "text-muted hover:text-content"}`}>{currency}</button>)}
+                {trm && <div className="hidden px-2 text-[10px] leading-4 text-muted lg:block"><span className="font-bold text-content">TRM {money(trm.valor, 'COP')}</span><br />{new Date(`${trm.fecha}T00:00:00`).toLocaleDateString('es-CO')}</div>}
+              </div>
+              <div className="flex gap-2 rounded-2xl bg-surface-2/80 p-1.5">
+                <button onClick={() => setTab("planes")} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${tab === "planes" ? "bg-brand text-white shadow" : "text-muted hover:text-content"}`}>Planes ({planes.length})</button>
+                <button onClick={() => setTab("propuestas")} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${tab === "propuestas" ? "bg-brand text-white shadow" : "text-muted hover:text-content"}`}>Propuestas ({propuestas.length})</button>
+              </div>
             </div>
           </div>
         </header>
@@ -264,9 +314,9 @@ export default function AdminPlanes() {
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black text-content">{editId ? "Editar plan" : "Nuevo plan"}</h3>{editId && <button type="button" onClick={resetPlan} className="text-sm font-bold text-muted hover:text-content">Cancelar edición</button>}</div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Field label="Plan"><select className={inputClass} value={planForm.nombre} onChange={(e) => setPlanForm({ ...planForm, nombre: e.target.value })} disabled={Boolean(editId)}>{PLAN_NAMES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
-              <Field label="Costo interno"><input className={inputClass} type="number" min="0" step="0.01" value={planForm.costo} onChange={(e) => setPlanForm({ ...planForm, costo: e.target.value })} required /></Field>
-              <Field label="Precio comercial"><input className={inputClass} type="number" min="0" step="0.01" value={planForm.precio} onChange={(e) => setPlanForm({ ...planForm, precio: e.target.value })} required /></Field>
-              <Field label="Moneda"><input className={inputClass} maxLength="3" value={planForm.moneda} onChange={(e) => setPlanForm({ ...planForm, moneda: e.target.value.toUpperCase() })} required /></Field>
+              <Field label="Costo interno"><MoneyInput value={planForm.costo} currency={planForm.moneda} onChange={(value) => setPlanForm({ ...planForm, costo: value })} required /></Field>
+              <Field label="Precio comercial"><MoneyInput value={planForm.precio} currency={planForm.moneda} onChange={(value) => setPlanForm({ ...planForm, precio: value })} required /></Field>
+              <Field label="Moneda"><select className={inputClass} value={planForm.moneda} onChange={(e) => changePlanCurrency(e.target.value)}><option value="COP">COP — Peso colombiano</option><option value="USD" disabled={!trm}>USD — Dólar estadounidense</option></select></Field>
               <Field label="Periodicidad"><select className={inputClass} value={planForm.periodicidad} onChange={(e) => setPlanForm({ ...planForm, periodicidad: e.target.value })}>{PERIODICIDADES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
               <Field label="Consultas incluidas"><input className={inputClass} type="number" min="0" placeholder="Sin cupo fijo" value={planForm.consultas_incluidas} onChange={(e) => setPlanForm({ ...planForm, consultas_incluidas: e.target.value })} /></Field>
               <div className="md:col-span-2"><Field label="Descripción"><input className={inputClass} value={planForm.descripcion} onChange={(e) => setPlanForm({ ...planForm, descripcion: e.target.value })} placeholder="Alcance y beneficios del plan" /></Field></div>
@@ -276,22 +326,23 @@ export default function AdminPlanes() {
               <button disabled={saving} className="rounded-xl bg-gradient-to-r from-brand to-brand-2 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand/20 disabled:opacity-60">{saving ? "Guardando…" : editId ? "Actualizar plan" : "Crear plan"}</button>
             </div>
           </form>
-          <PlansTable loading={loading} planes={planes} onEdit={editPlan} onRates={openRates} onAssign={openAssign} onDelete={deletePlan} />
+          <PlansTable loading={loading} planes={planes} displayCurrency={displayCurrency} trm={trm} onEdit={editPlan} onRates={openRates} onAssign={openAssign} onDelete={deletePlan} />
         </> : <>
           <form onSubmit={saveProposal} className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg md:p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black text-content">{editingProposalId ? `Editar propuesta #${editingProposalId}` : "Nueva propuesta"}</h3>{editingProposalId && <button type="button" onClick={resetProposal} className="text-sm font-bold text-muted hover:text-content">Cancelar edición</button>}</div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Field label="Plan"><select className={inputClass} value={proposalForm.plan} onChange={(e) => chooseProposalPlan(e.target.value)} required><option value="">Selecciona un plan</option>{activePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.nombre_display || plan.nombre}</option>)}</select></Field>
-              <Field label="Tarifa por volumen"><select className={inputClass} value={proposalForm.tarifa_origen} onChange={(e) => chooseProposalRate(e.target.value)} disabled={!proposalPlan}><option value="">Precio personalizado</option>{(proposalPlan?.tarifas || []).filter((rate) => rate.activo).map((rate) => <option key={rate.id} value={rate.id}>{rate.cantidad.toLocaleString("es-CO")} consultas · {money(rate.precio_paquete, proposalPlan.moneda)}</option>)}</select></Field>
+              <Field label="Tarifa por volumen"><select className={inputClass} value={proposalForm.tarifa_origen} onChange={(e) => chooseProposalRate(e.target.value)} disabled={!proposalPlan}><option value="">Precio personalizado</option>{(proposalPlan?.tarifas || []).filter((rate) => rate.activo).map((rate) => <option key={rate.id} value={rate.id}>{rate.cantidad.toLocaleString("es-CO")} consultas · {money(convertCurrency(rate.precio_paquete, proposalPlan.moneda, proposalForm.moneda, trm), proposalForm.moneda)}</option>)}</select></Field>
+              <Field label="Moneda de la propuesta"><select className={inputClass} value={proposalForm.moneda} onChange={(e) => changeProposalCurrency(e.target.value)}><option value="COP">COP — Peso colombiano</option><option value="USD" disabled={!trm}>USD — Dólar con TRM</option></select></Field>
               <Field label="Nombre del cliente"><input className={inputClass} value={proposalForm.cliente_nombre} onChange={(e) => setProposalForm({ ...proposalForm, cliente_nombre: e.target.value })} required /></Field>
               <Field label="Empresa"><input className={inputClass} value={proposalForm.cliente_empresa} onChange={(e) => setProposalForm({ ...proposalForm, cliente_empresa: e.target.value })} /></Field>
               <Field label="Correo"><input className={inputClass} type="email" value={proposalForm.cliente_email} onChange={(e) => setProposalForm({ ...proposalForm, cliente_email: e.target.value })} required /></Field>
               <Field label="Cantidad"><input className={inputClass} type="number" min="1" value={proposalForm.cantidad} onChange={(e) => setProposalForm({ ...proposalForm, cantidad: e.target.value, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" })} required /></Field>
-              <Field label="Precio unitario"><input className={inputClass} type="number" min="0" step="0.01" value={proposalForm.precio_unitario} onChange={(e) => setProposalForm({ ...proposalForm, precio_unitario: e.target.value, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" })} required /></Field>
+              <Field label="Precio unitario"><MoneyInput value={proposalForm.precio_unitario} currency={proposalForm.moneda} onChange={(value) => setProposalForm({ ...proposalForm, precio_unitario: value, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" })} required /></Field>
               <Field label="Descuento comercial adicional %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={proposalForm.descuento_porcentaje} onChange={(e) => setProposalForm({ ...proposalForm, descuento_porcentaje: e.target.value })} /></Field>
               <Field label="Válida hasta"><input className={inputClass} type="date" value={proposalForm.valida_hasta} onChange={(e) => setProposalForm({ ...proposalForm, valida_hasta: e.target.value })} required /></Field>
               <div className="md:col-span-2 lg:col-span-3"><Field label="Observaciones"><textarea className={`${inputClass} min-h-20 resize-y`} value={proposalForm.observaciones} onChange={(e) => setProposalForm({ ...proposalForm, observaciones: e.target.value })} placeholder="Condiciones especiales, alcance o notas para el cliente" /></Field></div>
-              <div className="rounded-2xl border border-brand/20 bg-brand/5 p-4"><div className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted">Total propuesto</div><div className="mt-1 text-2xl font-black text-brand">{money(proposalTotal, proposalPlan?.moneda || "COP")}</div>{Number(proposalForm.descuento_volumen_porcentaje) > 0 && <div className="mt-1 text-xs font-semibold text-emerald-600">Incluye {proposalForm.descuento_volumen_porcentaje}% de ahorro por volumen</div>}{proposalForm.precio_consulta_adicional !== "" && <div className="mt-1 text-xs text-muted">Consulta adicional: {money(proposalForm.precio_consulta_adicional, proposalPlan?.moneda || "COP")}</div>}</div>
+              <div className="rounded-2xl border border-brand/20 bg-brand/5 p-4"><div className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted">Total propuesto</div><div className="mt-1 text-2xl font-black text-brand">{money(proposalTotal, proposalForm.moneda)}</div>{Number(proposalForm.descuento_volumen_porcentaje) > 0 && <div className="mt-1 text-xs font-semibold text-emerald-600">Incluye {proposalForm.descuento_volumen_porcentaje}% de ahorro por volumen</div>}{proposalForm.precio_consulta_adicional !== "" && <div className="mt-1 text-xs text-muted">Consulta adicional: {money(proposalForm.precio_consulta_adicional, proposalForm.moneda)}</div>}{proposalForm.moneda === 'USD' && trm && <div className="mt-1 text-[10px] text-muted">Convertido con TRM {money(trm.valor, 'COP')} del {new Date(`${trm.fecha}T00:00:00`).toLocaleDateString('es-CO')}</div>}</div>
             </div>
             <div className="mt-4 flex justify-end"><button disabled={saving} className="rounded-xl bg-gradient-to-r from-brand to-brand-2 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand/20 disabled:opacity-60">{saving ? "Guardando…" : editingProposalId ? "Actualizar propuesta" : "Guardar borrador"}</button></div>
           </form>
@@ -311,6 +362,10 @@ export default function AdminPlanes() {
             <div className="text-[10px] font-black uppercase tracking-[0.2em] text-brand">Configuración comercial</div>
             <h3 className="mt-1 text-2xl font-black tracking-tight">Tarifas de {selectedPlan?.nombre_display || selectedPlan?.nombre}</h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted">Precios escalonados según la cantidad de consultas. El ahorro por volumen no modifica el descuento comercial adicional de la propuesta.</p>
+            <div className="mt-4 inline-flex items-center gap-1 rounded-xl border border-line/15 bg-surface-2/70 p-1">
+              {['COP', 'USD'].map((currency) => <button key={currency} type="button" disabled={currency === 'USD' && !trm} onClick={() => setRateCurrency(currency)} className={`rounded-lg px-3 py-1.5 text-xs font-black transition disabled:opacity-40 ${rateCurrency === currency ? 'bg-brand text-white' : 'text-muted hover:text-content'}`}>{currency}</button>)}
+              {rateCurrency === 'USD' && trm && <span className="px-2 text-[10px] text-muted">TRM {money(trm.valor, 'COP')}</span>}
+            </div>
           </div>
         </div>
 
@@ -324,10 +379,10 @@ export default function AdminPlanes() {
                 <tbody className="divide-y divide-line/10">
                   {rateRows.map((rate, index) => <tr key={rate.id || `new-${index}`} className="bg-surface transition hover:bg-brand/[0.035]">
                     <td className="px-3 py-3"><input aria-label="Cantidad de consultas" className={`${inputClass} min-w-[120px] font-bold`} type="number" min="1" value={rate.cantidad} onChange={(e) => updateRate(index, "cantidad", e.target.value)} /></td>
-                    <td className="px-3 py-3"><input aria-label="Precio unitario" className={`${inputClass} min-w-[150px]`} type="number" min="0" step="0.01" value={rate.precio_unitario} onChange={(e) => updateRate(index, "precio_unitario", e.target.value)} /></td>
-                    <td className="px-3 py-3"><input aria-label="Precio del paquete" className={`${inputClass} min-w-[165px] font-bold`} type="number" min="0" step="0.01" value={rate.precio_paquete} onChange={(e) => updateRate(index, "precio_paquete", e.target.value)} /></td>
+                    <td className="px-3 py-3"><MoneyInput className="min-w-[165px]" ariaLabel="Precio unitario" currency={rateCurrency} value={convertCurrency(rate.precio_unitario, selectedPlan?.moneda, rateCurrency, trm)} onChange={(value) => updateRateMoney(index, "precio_unitario", value)} /></td>
+                    <td className="px-3 py-3"><MoneyInput className="min-w-[180px] font-bold" ariaLabel="Precio del paquete" currency={rateCurrency} value={convertCurrency(rate.precio_paquete, selectedPlan?.moneda, rateCurrency, trm)} onChange={(value) => updateRateMoney(index, "precio_paquete", value)} /></td>
                     <td className="px-3 py-3"><div className="relative min-w-[105px]"><input aria-label="Ahorro porcentual" className={`${inputClass} pr-8`} type="number" min="0" max="100" step="0.01" value={rate.descuento_porcentaje} onChange={(e) => updateRate(index, "descuento_porcentaje", e.target.value)} /><span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted">%</span></div></td>
-                    <td className="px-3 py-3"><input aria-label="Precio de consulta adicional" className={`${inputClass} min-w-[165px]`} type="number" min="0" step="0.01" placeholder="No definida" value={rate.precio_consulta_adicional} onChange={(e) => updateRate(index, "precio_consulta_adicional", e.target.value)} /></td>
+                    <td className="px-3 py-3"><MoneyInput className="min-w-[180px]" ariaLabel="Precio de consulta adicional" currency={rateCurrency} placeholder="No definida" allowEmpty value={rate.precio_consulta_adicional === '' ? '' : convertCurrency(rate.precio_consulta_adicional, selectedPlan?.moneda, rateCurrency, trm)} onChange={(value) => updateRateMoney(index, "precio_consulta_adicional", value)} /></td>
                     <td className="px-3 py-3 text-right"><button type="button" title="Eliminar tarifa" aria-label="Eliminar tarifa" onClick={() => setRateRows((rows) => rows.filter((_, rowIndex) => rowIndex !== index))} className="grid h-10 w-10 place-items-center rounded-xl border border-red-400/20 bg-red-500/10 text-xl font-bold text-red-500 transition hover:bg-red-500 hover:text-white">×</button></td>
                   </tr>)}
                 </tbody>
@@ -350,21 +405,38 @@ export default function AdminPlanes() {
 
 function Field({ label, children }) { return <label><span className={labelClass}>{label}</span>{children}</label>; }
 
-function PlansTable({ loading, planes, onEdit, onRates, onAssign, onDelete }) {
+function MoneyInput({ value, onChange, currency = "COP", className = "", placeholder = "0", ariaLabel, allowEmpty = false, required = false }) {
+  const numericValue = value === "" ? "" : Math.round(Number(value || 0));
+  const formatted = numericValue === "" ? "" : Number(numericValue).toLocaleString("es-CO", { maximumFractionDigits: 0 });
+  const handleChange = (event) => {
+    const digits = event.target.value.replace(/[^0-9]/g, "");
+    onChange(digits === "" && allowEmpty ? "" : digits || "0");
+  };
+  return <div className={`relative ${className}`}>
+    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-brand">$</span>
+    <input aria-label={ariaLabel} className={`${inputClass} pl-7 pr-12 font-semibold`} type="text" inputMode="numeric" value={formatted} onChange={handleChange} placeholder={placeholder} required={required} />
+    <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-black text-muted">{currency}</span>
+  </div>;
+}
+
+function PlansTable({ loading, planes, displayCurrency, trm, onEdit, onRates, onAssign, onDelete }) {
   return <div className="overflow-hidden rounded-[24px] border border-line/15 bg-surface/90 shadow-lg"><div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-sm text-content">
     <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Plan</th><th className="px-3 py-3">Costo interno</th><th className="px-3 py-3">Valor unitario</th><th className="px-3 py-3">Valor paquete</th><th className="px-3 py-3">Margen</th><th className="px-3 py-3">Condiciones</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
     <tbody>{loading ? <tr><td colSpan="8" className="px-5 py-12 text-center text-muted">Cargando planes…</td></tr> : planes.length === 0 ? <tr><td colSpan="8" className="px-5 py-12 text-center text-muted">Aún no hay planes.</td></tr> : planes.map((plan) => {
       const reference = tariffReference(plan);
-      const commercialPrice = reference ? Number(reference.precio_paquete) : Number(plan.precio || 0);
-      const internalCost = Number(plan.costo || 0);
+      const commercialPriceBase = reference ? Number(reference.precio_paquete) : Number(plan.precio || 0);
+      const internalCostBase = Number(plan.costo || 0);
+      const commercialPrice = convertCurrency(commercialPriceBase, plan.moneda, displayCurrency, trm);
+      const unitPrice = reference ? convertCurrency(reference.precio_unitario, plan.moneda, displayCurrency, trm) : 0;
+      const internalCost = convertCurrency(internalCostBase, plan.moneda, displayCurrency, trm);
       const hasInternalCost = internalCost > 0;
       const margin = commercialPrice - internalCost;
       return <tr key={plan.id} className="border-t border-line/10 hover:bg-brand/[0.04]">
       <td className="px-5 py-4"><div className="font-black">{plan.nombre_display || plan.nombre}</div><div className="mt-1 max-w-xs text-xs text-muted">{plan.descripcion || "Sin descripción"}</div></td>
-      <td className="px-3 py-4">{hasInternalCost ? <span className="text-muted">{money(internalCost, plan.moneda)}</span> : <span className="text-xs font-semibold text-amber-500">Sin definir</span>}</td>
-      <td className="px-3 py-4">{reference ? <><div className="font-black">{money(reference.precio_unitario, plan.moneda)}</div><div className="mt-1 text-xs text-muted">Por consulta</div></> : <span className="text-xs font-semibold text-muted">Sin tarifa</span>}</td>
-      <td className="px-3 py-4"><div className="font-black">{money(commercialPrice, plan.moneda)}</div>{reference && <div className="mt-1 text-xs text-muted">{Number(reference.cantidad).toLocaleString("es-CO")} consultas</div>}</td>
-      <td className="px-3 py-4">{hasInternalCost ? <span className={`font-bold ${margin < 0 ? "text-red-500" : "text-emerald-500"}`}>{money(margin, plan.moneda)}</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
+      <td className="px-3 py-4">{hasInternalCost ? <span className="text-muted">{money(internalCost, displayCurrency)}</span> : <span className="text-xs font-semibold text-amber-500">Sin definir</span>}</td>
+      <td className="px-3 py-4">{reference ? <><div className="font-black">{money(unitPrice, displayCurrency)}</div><div className="mt-1 text-xs text-muted">Por consulta · {displayCurrency}</div></> : <span className="text-xs font-semibold text-muted">Sin tarifa</span>}</td>
+      <td className="px-3 py-4"><div className="font-black">{money(commercialPrice, displayCurrency)}</div>{reference && <div className="mt-1 text-xs text-muted">{Number(reference.cantidad).toLocaleString("es-CO")} consultas · {displayCurrency}</div>}</td>
+      <td className="px-3 py-4">{hasInternalCost ? <span className={`font-bold ${margin < 0 ? "text-red-500" : "text-emerald-500"}`}>{money(margin, displayCurrency)}</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
       <td className="px-3 py-4"><div>{plan.periodicidad_display}</div><div className="text-xs text-muted">{(plan.tarifas || []).length > 0 ? `${plan.tarifas.length} tarifas por volumen` : plan.consultas_incluidas == null ? "Cupo personalizado" : `${plan.consultas_incluidas} consultas`}</div></td>
       <td className="px-3 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${plan.activo ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-muted"}`}>{plan.activo ? "Activo" : "Inactivo"}</span></td>
       <td className="px-5 py-4"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Tarifas</Action><Action onClick={() => onEdit(plan)} tone="brand">Editar</Action><Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action><Action onClick={() => onDelete(plan)} tone="red">Eliminar</Action></div></td>

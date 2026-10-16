@@ -70,21 +70,7 @@ const PLANS = [
     cta: "Empezar ahora",
     featured: false,
   },
-  {
-    id: "essential-express",
-    title: "Essential Express",
-    subtitle: "Validación rápida con las fuentes más consultadas. Resultados en segundos.",
-    color: "teal",
-    features: [
-      "1 validación = 1 consulta",
-      "Fuentes de alta velocidad seleccionadas",
-      "Resultados optimizados en segundos",
-      "Reporte PDF individual",
-      "Ideal para procesos de alta rotación",
-    ],
-    cta: "Empezar ahora",
-    featured: false,
-  },
+  // Essential Express retirado del catálogo comercial (ya no se ofrece como plan).
   {
     id: "basic-element",
     title: "Basic Element",
