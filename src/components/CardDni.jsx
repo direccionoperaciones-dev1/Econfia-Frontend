@@ -51,6 +51,10 @@ export default function CardDni({ data }) {
   const cedula = data?.document || data?.cedula || "Sin NUIP";
   const sexo = data?.gender || data?.sexo || "No definido";
   const fechaNacimiento = data?.birth_date || data?.fecha_nacimiento || "";
+  // Solo mostramos estos campos cuando hay dato real (si no, no se renderizan).
+  const haySexo = Boolean((data?.gender || data?.sexo || "").trim());
+  const anioNacimiento = soloAnio(fechaNacimiento);
+  const hayAnioNac = Boolean(fechaNacimiento) && anioNacimiento !== "No disponible";
   const tipoDoc = data?.doc_type || data?.tipo_doc || "";
   const fechaExpedicion = data?.fecha_expedicion || "";
   const documentoLabel = tipoDoc === "CC" ? "Cedula de ciudadania" : tipoDoc || "Documento";
@@ -222,15 +226,23 @@ export default function CardDni({ data }) {
                 {nombre}
               </p>
 
-              <p className="text-[11px] sm:text-[13px] font-bold uppercase tracking-wide text-slate-700">Sexo</p>
-              <p className="border-b border-slate-300/65 pb-1 text-[11px] sm:text-[13px] font-medium uppercase tracking-wide text-slate-800 sm:text-sm">
-                {sexo}
-              </p>
+              {haySexo && (
+                <>
+                  <p className="text-[11px] sm:text-[13px] font-bold uppercase tracking-wide text-slate-700">Sexo</p>
+                  <p className="border-b border-slate-300/65 pb-1 text-[11px] sm:text-[13px] font-medium uppercase tracking-wide text-slate-800 sm:text-sm">
+                    {sexo}
+                  </p>
+                </>
+              )}
 
-              <p className="text-[11px] sm:text-[13px] font-bold uppercase tracking-wide text-slate-700">Año nac.</p>
-              <p className="border-b border-slate-300/65 pb-1 text-[11px] sm:text-[13px] font-medium uppercase tracking-wide text-slate-800 sm:text-sm">
-                {soloAnio(fechaNacimiento)}
-              </p>
+              {hayAnioNac && (
+                <>
+                  <p className="text-[11px] sm:text-[13px] font-bold uppercase tracking-wide text-slate-700">Año nac.</p>
+                  <p className="border-b border-slate-300/65 pb-1 text-[11px] sm:text-[13px] font-medium uppercase tracking-wide text-slate-800 sm:text-sm">
+                    {anioNacimiento}
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="rounded-[10px] sm:rounded-[12px] border border-cyan-200/25 bg-[linear-gradient(90deg,rgba(15,47,77,0.09),rgba(255,255,255,0.16),rgba(24,93,143,0.12))] px-2.5 py-2 sm:px-4 sm:py-3">
