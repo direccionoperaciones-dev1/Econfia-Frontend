@@ -202,8 +202,12 @@ function resultadoCard(r, i, total, mediaBase, fechaConsulta) {
     </div>`
     : "";
 
+  const scoreNum = parseFloat(r?.score);
+  const hallazgo = Number.isFinite(scoreNum) && scoreNum >= 2;
+  const nombreBusqueda = String(r?.fuente || r?.fuente_nombre || nombreAmigable || "fuente").toLowerCase().replace(/"/g, "");
+
   return `
-  <section class="bg-brand-surface rounded-2xl border border-brand-border/90 overflow-hidden shadow-hud">
+  <section id="f${i}" data-nombre="${nombreBusqueda}" data-hallazgo="${hallazgo ? 1 : 0}" class="fuente-card scroll-mt-28 bg-brand-surface rounded-2xl border ${hallazgo ? "border-rose-500/50" : "border-brand-border/90"} overflow-hidden shadow-hud">
     <div class="bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-800 px-6 py-3 flex items-center justify-between gap-2">
       <div class="flex items-center gap-3 min-w-0">
         <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
@@ -296,6 +300,30 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
     .map((r, idx) => resultadoCard(r, idx + 1, totalFuentes, mediaBase, consulta?.fecha))
     .join("\n");
 
+  // Atajos: fuentes con hallazgo (score >= 2) para saltar directo.
+  const conHallazgo = items
+    .map((r, idx) => ({ r, idx: idx + 1, n: parseFloat(r?.score) }))
+    .filter((x) => Number.isFinite(x.n) && x.n >= 2);
+  const chips = conHallazgo
+    .map((x) => `<a href="#f${x.idx}" class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-950/60 border border-rose-500/40 text-rose-200 text-xs font-semibold hover:bg-rose-900/70 transition">${esc(x.r?.fuente || x.r?.fuente_nombre || "Fuente")}</a>`)
+    .join("");
+  const barraBusqueda = `
+  <div class="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-3 bg-brand-navy/95 backdrop-blur-md border-b border-brand-border/70">
+    <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+      <div class="relative flex-1 min-w-0">
+        <input id="buscar-fuente" type="text" placeholder="Buscar fuente... (ej. policía, RUES, OFAC)" autocomplete="off"
+          class="w-full px-4 py-2 rounded-lg bg-brand-card border border-brand-border text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-brand-cyan/60"/>
+        <span id="buscar-contador" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500"></span>
+      </div>
+      ${conHallazgo.length
+        ? `<div class="flex items-center gap-2 overflow-x-auto pb-1">
+             <span class="text-xs text-rose-300 font-semibold shrink-0">⚠ ${conHallazgo.length} con hallazgo:</span>
+             ${chips}
+           </div>`
+        : `<span class="text-xs text-brand-emerald font-semibold shrink-0">✓ Sin hallazgos</span>`}
+    </div>
+  </div>`;
+
   return `<!DOCTYPE html>
 <html class="dark" lang="es"><head>
 <meta charset="utf-8"/>
@@ -322,6 +350,7 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
 </head>
 <body class="bg-brand-navy text-slate-200 font-sans antialiased min-h-screen bg-grid-cyber">
 <div class="max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-10 py-6 space-y-6">
+${barraBusqueda}
 
   <!-- Header -->
   <header class="bg-brand-surface/90 backdrop-blur-md rounded-2xl p-5 border border-brand-border/80 shadow-hud flex flex-col md:flex-row items-center justify-between gap-4">
@@ -482,6 +511,50 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
   </footer>
 
 </div>
+
+<!-- Botón volver arriba -->
+<button id="btn-top" title="Volver al inicio"
+  class="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-brand-emerald text-brand-navy shadow-neon-green flex items-center justify-center font-bold text-xl opacity-0 pointer-events-none transition-opacity">↑</button>
+
+<script>
+  (function () {
+    var input = document.getElementById('buscar-fuente');
+    var contador = document.getElementById('buscar-contador');
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.fuente-card'));
+    var total = cards.length;
+
+    function filtrar() {
+      var q = (input.value || '').trim().toLowerCase();
+      var visibles = 0;
+      cards.forEach(function (c) {
+        var match = !q || (c.getAttribute('data-nombre') || '').indexOf(q) !== -1
+          || (c.textContent || '').toLowerCase().indexOf(q) !== -1;
+        c.style.display = match ? '' : 'none';
+        if (match) visibles++;
+      });
+      contador.textContent = q ? (visibles + '/' + total) : '';
+    }
+    if (input) input.addEventListener('input', filtrar);
+
+    // Scroll suave para los atajos y el botón top
+    document.querySelectorAll('a[href^="#f"]').forEach(function (a) {
+      a.addEventListener('click', function (e) {
+        var el = document.getElementById(this.getAttribute('href').slice(1));
+        if (el) { e.preventDefault(); el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          el.classList.add('ring-2','ring-brand-cyan');
+          setTimeout(function(){ el.classList.remove('ring-2','ring-brand-cyan'); }, 1600); }
+      });
+    });
+
+    var btnTop = document.getElementById('btn-top');
+    window.addEventListener('scroll', function () {
+      var mostrar = window.scrollY > 400;
+      btnTop.style.opacity = mostrar ? '1' : '0';
+      btnTop.style.pointerEvents = mostrar ? 'auto' : 'none';
+    });
+    btnTop.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+  })();
+</script>
 </body></html>`;
 }
 
