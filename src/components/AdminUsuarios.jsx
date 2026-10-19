@@ -606,45 +606,73 @@ const AdminUsuarios = () => {
     }
   };
 
-  // Actualiza la config multi-empresa de la organización (PATCH) + marca al dueño.
-  const handleActualizarEmpresa = async () => {
-    if (!empresaOrgId) return;
+  // Guarda la config de la empresa. Si el usuario NO tiene organización-contenedor,
+  // la crea automáticamente aquí mismo (SIN marca blanca: colores por defecto, sin logo).
+  // La marca blanca es un extra opcional que se hace aparte en la acción "Marca".
+  const handleGuardarEmpresa = async () => {
+    if (!empresaUser?.perfil) return;
     setOrgConfigSaving(true);
     try {
-      const body = { pool_infinito: !!orgConfig.pool_infinito };
-      // max_usuarios vacío => null (sin límite). pool/dispositivos vacíos => no se tocan.
-      body.max_usuarios = orgConfig.max_usuarios === "" ? null : Number(orgConfig.max_usuarios);
-      if (orgConfig.pool_consultas !== "") body.pool_consultas = Number(orgConfig.pool_consultas);
-      if (orgConfig.max_dispositivos !== "") body.max_dispositivos = Number(orgConfig.max_dispositivos);
-      const res = await fetch(`${API_URL}/api/organizaciones/${empresaOrgId}/`, {
-        method: "PATCH",
-        headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        const primerError = Object.values(data)[0];
-        throw new Error(Array.isArray(primerError) ? primerError[0] : "No se pudo actualizar la empresa");
-      }
-      setOrganizaciones((prev) => prev.map((o) => (String(o.id) === String(empresaOrgId) ? data : o)));
+      let orgId = empresaOrgId;
 
-      // Marcar/desmarcar al usuario como dueño (es_admin_organizacion) de esa org.
-      if (empresaUser?.perfil) {
-        const res2 = await fetch(`${API_URL}/api/perfiles/${empresaUser.perfil.id}/asignar-organizacion/`, {
-          method: "POST",
-          headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ organizacion_id: empresaOrgId, es_admin_organizacion: empresaEsAdmin }),
+      if (!orgId) {
+        // Crear el contenedor de empresa a partir del nombre de la cuenta.
+        const base = (empresaUser.perfil?.nombre_empresa || empresaUser.username || "empresa").trim();
+        const slug = base.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "")
+          .replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") + "-" + empresaUser.id;
+        const fd = new FormData();
+        fd.append("nombre", base || `Empresa ${empresaUser.id}`);
+        fd.append("slug", slug);
+        fd.append("pool_infinito", orgConfig.pool_infinito);
+        fd.append("pool_consultas", orgConfig.pool_consultas === "" ? 0 : Number(orgConfig.pool_consultas));
+        if (orgConfig.max_usuarios !== "") fd.append("max_usuarios", Number(orgConfig.max_usuarios));
+        if (orgConfig.max_dispositivos !== "") fd.append("max_dispositivos", Number(orgConfig.max_dispositivos));
+        const resC = await fetch(`${API_URL}/api/organizaciones/`, {
+          method: "POST", headers: { Authorization: `Token ${token}` }, body: fd,
         });
-        if (res2.ok) {
-          const d2 = await res2.json();
-          setUsers((prev) => prev.map((u) => u.id === empresaUser.id
-            ? { ...u, perfil: { ...u.perfil, organizacion: d2.organizacion, es_admin_organizacion: d2.es_admin_organizacion } }
-            : u));
+        const dataC = await resC.json();
+        if (!resC.ok) {
+          const pe = Object.values(dataC)[0];
+          throw new Error(Array.isArray(pe) ? pe[0] : "No se pudo crear la empresa");
         }
+        orgId = dataC.id;
+        setEmpresaOrgId(String(orgId));
+        setOrganizaciones((prev) => [...prev, dataC]);
+      } else {
+        // Actualizar la empresa existente (PATCH).
+        const body = { pool_infinito: !!orgConfig.pool_infinito };
+        body.max_usuarios = orgConfig.max_usuarios === "" ? null : Number(orgConfig.max_usuarios);
+        if (orgConfig.pool_consultas !== "") body.pool_consultas = Number(orgConfig.pool_consultas);
+        if (orgConfig.max_dispositivos !== "") body.max_dispositivos = Number(orgConfig.max_dispositivos);
+        const res = await fetch(`${API_URL}/api/organizaciones/${orgId}/`, {
+          method: "PATCH",
+          headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          const pe = Object.values(data)[0];
+          throw new Error(Array.isArray(pe) ? pe[0] : "No se pudo actualizar la empresa");
+        }
+        setOrganizaciones((prev) => prev.map((o) => (String(o.id) === String(orgId) ? data : o)));
       }
-      setToast({ type: "success", message: "Configuración de empresa actualizada" });
+
+      // Vincular la empresa al perfil + marcar/desmarcar al dueño.
+      const res2 = await fetch(`${API_URL}/api/perfiles/${empresaUser.perfil.id}/asignar-organizacion/`, {
+        method: "POST",
+        headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ organizacion_id: orgId, es_admin_organizacion: empresaEsAdmin }),
+      });
+      if (res2.ok) {
+        const d2 = await res2.json();
+        setUsers((prev) => prev.map((u) => u.id === empresaUser.id
+          ? { ...u, perfil: { ...u.perfil, organizacion: d2.organizacion, es_admin_organizacion: d2.es_admin_organizacion } }
+          : u));
+      }
+      setToast({ type: "success", message: "Empresa configurada" });
+      fetchEmpresaAudit(orgId);
     } catch (e) {
-      setToast({ type: "error", message: e.message || "Error al actualizar la empresa" });
+      setToast({ type: "error", message: e.message || "Error al configurar la empresa" });
     } finally {
       setOrgConfigSaving(false);
     }
@@ -1957,16 +1985,17 @@ const AdminUsuarios = () => {
           subtitle={`Usuario: ${empresaUser?.username || ""}`}
           wide
         >
-          {!empresaOrgId ? (
-            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-5 text-sm text-amber-100/80">
-              Este usuario no tiene una organización asignada todavía. Asígnala (o créala) en la acción
-              <strong> “Marca blanca”</strong> y vuelve aquí para configurar usuarios, bolsa y límites.
-            </div>
-          ) : (
+          {(
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Columna 1: configuración */}
               <div className="flex flex-col gap-3">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Configuración</div>
+                {!empresaOrgId && (
+                  <p className="text-[11px] text-white/45 leading-relaxed">
+                    Esta cuenta aún no está activada como empresa. Al guardar se activa automáticamente
+                    (sin marca blanca; la marca es opcional y se configura aparte).
+                  </p>
+                )}
                 <div className="grid grid-cols-2 gap-3">
                   <ModalInput
                     label="Máx. usuarios"
@@ -2013,16 +2042,23 @@ const AdminUsuarios = () => {
                 </label>
                 <button
                   type="button"
-                  onClick={handleActualizarEmpresa}
+                  onClick={handleGuardarEmpresa}
                   disabled={orgConfigSaving}
                   className="w-full rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-110 disabled:opacity-50"
                 >
-                  {orgConfigSaving ? "Guardando…" : "Guardar configuración"}
+                  {orgConfigSaving ? "Guardando…" : (empresaOrgId ? "Guardar configuración" : "Activar empresa y guardar")}
                 </button>
               </div>
 
               {/* Columna 2: auditoría compartida (IP / canal / dispositivos) */}
               <div className="flex flex-col gap-3">
+                {!empresaOrgId ? (
+                  <div className="text-xs text-white/40 py-6 text-center">
+                    La auditoría (IP / canal / dispositivos) aparece una vez la empresa esté activada.
+                  </div>
+                ) : (
+                <>
+                  {/* wrapper auditoría */}
                 <div className="flex items-center justify-between">
                   <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Auditoría (IP / canal)</div>
                   <button
@@ -2078,6 +2114,8 @@ const AdminUsuarios = () => {
                       )}
                     </div>
                   </>
+                )}
+                </>
                 )}
               </div>
             </div>
