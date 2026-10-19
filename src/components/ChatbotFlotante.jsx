@@ -217,7 +217,11 @@ export default function ChatbotFlotante() {
 			body: JSON.stringify({ mensaje: texto, historial }),
 		});
 		const data = await res.json().catch(() => ({}));
-		if (!res.ok) throw new Error(data.error || "IA no disponible");
+		if (!res.ok) {
+			// Si el backend manda detalle de Gemini, lo mostramos para diagnosticar.
+			if (data.detalle) throw new Error(`${data.error || "IA no disponible"} (${data.detalle})`);
+			throw new Error(data.error || "IA no disponible");
+		}
 		return data.respuesta;
 	};
 
