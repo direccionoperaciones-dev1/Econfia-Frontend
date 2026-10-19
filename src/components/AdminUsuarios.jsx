@@ -153,7 +153,7 @@ const AdminUsuarios = () => {
   const [orgEsAdmin, setOrgEsAdmin]               = useState(false);
   const [guardandoOrg, setGuardandoOrg]           = useState(false);
   const [showNuevaOrgForm, setShowNuevaOrgForm]   = useState(false);
-  const [nuevaOrg, setNuevaOrg]                   = useState({ nombre: "", slug: "", color_acento: "#10b981", color_secundario: "", nombre_wallet: "" });
+  const [nuevaOrg, setNuevaOrg]                   = useState({ nombre: "", slug: "", color_acento: "#10b981", color_secundario: "", nombre_wallet: "", max_usuarios: "", pool_consultas: "", pool_infinito: false, max_dispositivos: "" });
   const [nuevaOrgLogo, setNuevaOrgLogo]           = useState(null);
   const [nuevaOrgLogoPreview, setNuevaOrgLogoPreview] = useState("");
   const [creandoOrg, setCreandoOrg]               = useState(false);
@@ -559,7 +559,13 @@ const AdminUsuarios = () => {
     setCreandoOrg(true);
     try {
       const fd = new FormData();
-      Object.entries(nuevaOrg).forEach(([key, value]) => fd.append(key, value ?? ""));
+      Object.entries(nuevaOrg).forEach(([key, value]) => {
+        // Campos numéricos opcionales: si van vacíos, NO se mandan (el backend
+        // usa su default: pool_consultas=0, max_dispositivos=2, max_usuarios=null/sin límite).
+        if (["max_usuarios", "pool_consultas", "max_dispositivos"].includes(key) &&
+            (value === "" || value === null || value === undefined)) return;
+        fd.append(key, value ?? "");
+      });
       if (nuevaOrgLogo) fd.append("logo", nuevaOrgLogo);
       const res = await fetch(`${API_URL}/api/organizaciones/`, {
         method: "POST",
@@ -574,7 +580,7 @@ const AdminUsuarios = () => {
       setOrganizaciones((prev) => [...prev, data].sort((a, b) => a.nombre.localeCompare(b.nombre)));
       setSelectedOrgId(String(data.id));
       setShowNuevaOrgForm(false);
-      setNuevaOrg({ nombre: "", slug: "", color_acento: "#10b981", color_secundario: "", nombre_wallet: "" });
+      setNuevaOrg({ nombre: "", slug: "", color_acento: "#10b981", color_secundario: "", nombre_wallet: "", max_usuarios: "", pool_consultas: "", pool_infinito: false, max_dispositivos: "" });
       handleSeleccionarLogo(null);
       setToast({ type: "success", message: "Organización creada" });
     } catch (e) {
@@ -1766,6 +1772,50 @@ const AdminUsuarios = () => {
                     onChange={(e) => setNuevaOrg((prev) => ({ ...prev, nombre_wallet: e.target.value }))}
                     placeholder="CertiWallet (vacío = econfiaWallet)"
                   />
+
+                  {/* ── Multi-empresa: tope de usuarios, bolsa compartida y dispositivos ── */}
+                  <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <p className="text-xs font-semibold text-brand mb-2">Empresa multi-usuario</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <ModalInput
+                        label="Máx. usuarios"
+                        type="number"
+                        min="0"
+                        value={nuevaOrg.max_usuarios}
+                        onChange={(e) => setNuevaOrg((prev) => ({ ...prev, max_usuarios: e.target.value }))}
+                        placeholder="Vacío = sin límite"
+                      />
+                      <ModalInput
+                        label="Bolsa (pool consultas)"
+                        type="number"
+                        min="0"
+                        value={nuevaOrg.pool_consultas}
+                        onChange={(e) => setNuevaOrg((prev) => ({ ...prev, pool_consultas: e.target.value }))}
+                        placeholder="0"
+                      />
+                      <ModalInput
+                        label="Máx. dispositivos / usuario"
+                        type="number"
+                        min="1"
+                        value={nuevaOrg.max_dispositivos}
+                        onChange={(e) => setNuevaOrg((prev) => ({ ...prev, max_dispositivos: e.target.value }))}
+                        placeholder="2"
+                      />
+                      <label className="flex items-center gap-2 self-end pb-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={nuevaOrg.pool_infinito}
+                          onChange={(e) => setNuevaOrg((prev) => ({ ...prev, pool_infinito: e.target.checked }))}
+                          className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-brand focus:ring-brand"
+                        />
+                        <span className="text-xs text-white/70">Consultas ilimitadas</span>
+                      </label>
+                    </div>
+                    <p className="mt-2 text-[11px] text-white/35">
+                      El dueño (perfil marcado como admin de la organización) reparte esta bolsa entre sus usuarios, hasta el máximo indicado.
+                    </p>
+                  </div>
+
                   <div className="flex gap-2 mt-1">
                     <button
                       type="button"
