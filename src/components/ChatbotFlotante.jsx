@@ -32,6 +32,40 @@ const normalizar = (texto) =>
 		.normalize("NFD")
 		.replace(/[̀-ͯ]/g, "");
 
+// Render ligero de formato (negritas y viñetas) para que las respuestas de la IA
+// se vean bonitas en la burbuja, sin los "palitos" de tabla ni los asteriscos.
+const renderInline = (text) =>
+	String(text).split(/(\*\*[^*]+\*\*)/g).map((p, i) => {
+		const m = p.match(/^\*\*([^*]+)\*\*$/);
+		return m ? <strong key={i}>{m[1]}</strong> : <React.Fragment key={i}>{p}</React.Fragment>;
+	});
+
+const renderMarkdownLite = (texto) => {
+	const lineas = String(texto || "").split("\n");
+	const out = [];
+	let items = [];
+	const flush = (key) => {
+		if (items.length) {
+			out.push(<ul key={`ul-${key}`} className="list-disc pl-4 space-y-0.5 my-1">{items}</ul>);
+			items = [];
+		}
+	};
+	lineas.forEach((linea, i) => {
+		const sinPalitos = linea.replace(/\|/g, " ").trimEnd();
+		const t = sinPalitos.trim();
+		if (!t) { flush(i); return; }
+		if (/^[-\s]+$/.test(t)) return;               // separador de tabla "---" -> se ignora
+		const vineta = t.match(/^[-*]\s+(.*)/);
+		if (vineta) { items.push(<li key={`li-${i}`}>{renderInline(vineta[1])}</li>); return; }
+		flush(i);
+		const titulo = t.match(/^#{1,6}\s+(.*)/);
+		if (titulo) { out.push(<p key={i} className="font-bold mt-1">{renderInline(titulo[1])}</p>); return; }
+		out.push(<p key={i} className="my-0.5">{renderInline(t)}</p>);
+	});
+	flush("end");
+	return out;
+};
+
 // Base de conocimientos para respuestas automáticas
 const KNOWLEDGE_BASE = [
 	// ── Ayuda / general ───────────────────────────────────────────────
@@ -431,7 +465,9 @@ export default function ChatbotFlotante() {
 												: "bg-slate-700 text-brand rounded-bl-none border border-brand/30"
 										}`}
 									>
-										{msg.texto}
+										{msg.sender === "user"
+											? msg.texto
+											: <div className="leading-snug">{renderMarkdownLite(msg.texto)}</div>}
 										<div className="text-xs mt-1 opacity-70">
 											{msg.timestamp.toLocaleTimeString("es-CO", {
 												hour: "2-digit",
