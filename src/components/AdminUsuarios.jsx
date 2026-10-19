@@ -157,6 +157,9 @@ const AdminUsuarios = () => {
   const [nuevaOrgLogo, setNuevaOrgLogo]           = useState(null);
   const [nuevaOrgLogoPreview, setNuevaOrgLogoPreview] = useState("");
   const [creandoOrg, setCreandoOrg]               = useState(false);
+  // Config multi-empresa de una organización YA existente (editable desde "Marca")
+  const [orgConfig, setOrgConfig]                 = useState({ max_usuarios: "", pool_consultas: "", pool_infinito: false, max_dispositivos: "" });
+  const [orgConfigSaving, setOrgConfigSaving]     = useState(false);
 
   // Consultas realizadas
   const [showConsultasRealizadasModal, setShowConsultasRealizadasModal] = useState(false);
@@ -243,6 +246,23 @@ const AdminUsuarios = () => {
     fetchOrganizaciones();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // Precarga la config multi-empresa cuando se selecciona una organización existente.
+  useEffect(() => {
+    if (!selectedOrgId) {
+      setOrgConfig({ max_usuarios: "", pool_consultas: "", pool_infinito: false, max_dispositivos: "" });
+      return;
+    }
+    const org = organizaciones.find((o) => String(o.id) === String(selectedOrgId));
+    if (org) {
+      setOrgConfig({
+        max_usuarios: org.max_usuarios ?? "",
+        pool_consultas: org.pool_consultas ?? "",
+        pool_infinito: !!org.pool_infinito,
+        max_dispositivos: org.max_dispositivos ?? "",
+      });
+    }
+  }, [selectedOrgId, organizaciones]);
 
   // ── Ver consultas ─────────────────────────────────────────────
   const fetchConsultasRealizadas = async (userId, page = 1) => {
@@ -542,6 +562,35 @@ const AdminUsuarios = () => {
       setToast({ type: "error", message: "Error al asignar la organización" });
     } finally {
       setGuardandoOrg(false);
+    }
+  };
+
+  // Actualiza la config multi-empresa de una organización YA existente (PATCH).
+  const handleActualizarEmpresa = async () => {
+    if (!selectedOrgId) return;
+    setOrgConfigSaving(true);
+    try {
+      const body = { pool_infinito: !!orgConfig.pool_infinito };
+      // max_usuarios vacío => null (sin límite). pool/dispositivos vacíos => no se tocan.
+      body.max_usuarios = orgConfig.max_usuarios === "" ? null : Number(orgConfig.max_usuarios);
+      if (orgConfig.pool_consultas !== "") body.pool_consultas = Number(orgConfig.pool_consultas);
+      if (orgConfig.max_dispositivos !== "") body.max_dispositivos = Number(orgConfig.max_dispositivos);
+      const res = await fetch(`${API_URL}/api/organizaciones/${selectedOrgId}/`, {
+        method: "PATCH",
+        headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        const primerError = Object.values(data)[0];
+        throw new Error(Array.isArray(primerError) ? primerError[0] : "No se pudo actualizar la empresa");
+      }
+      setOrganizaciones((prev) => prev.map((o) => (String(o.id) === String(selectedOrgId) ? data : o)));
+      setToast({ type: "success", message: "Configuración de empresa actualizada" });
+    } catch (e) {
+      setToast({ type: "error", message: e.message || "Error al actualizar la empresa" });
+    } finally {
+      setOrgConfigSaving(false);
     }
   };
 
@@ -1658,6 +1707,58 @@ const AdminUsuarios = () => {
                   <strong>esquemas de credenciales</strong> de esta organización desde econfiaWallet.
                 </span>
               </label>
+            )}
+
+            {selectedOrgId && (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                <p className="text-xs font-semibold text-brand mb-2">Empresa multi-usuario</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <ModalInput
+                    label="Máx. usuarios"
+                    type="number"
+                    min="0"
+                    value={orgConfig.max_usuarios}
+                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, max_usuarios: e.target.value }))}
+                    placeholder="Vacío = sin límite"
+                  />
+                  <ModalInput
+                    label="Bolsa (pool consultas)"
+                    type="number"
+                    min="0"
+                    value={orgConfig.pool_consultas}
+                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, pool_consultas: e.target.value }))}
+                    placeholder="0"
+                  />
+                  <ModalInput
+                    label="Máx. dispositivos / usuario"
+                    type="number"
+                    min="1"
+                    value={orgConfig.max_dispositivos}
+                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, max_dispositivos: e.target.value }))}
+                    placeholder="2"
+                  />
+                  <label className="flex items-center gap-2 self-end pb-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={orgConfig.pool_infinito}
+                      onChange={(e) => setOrgConfig((prev) => ({ ...prev, pool_infinito: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs text-white/70">Consultas ilimitadas</span>
+                  </label>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleActualizarEmpresa}
+                  disabled={orgConfigSaving}
+                  className="mt-2 w-full rounded-lg border border-brand/30 bg-brand/10 py-2 text-xs font-bold text-brand transition hover:bg-brand/20 disabled:opacity-50"
+                >
+                  {orgConfigSaving ? "Actualizando…" : "Actualizar empresa"}
+                </button>
+                <p className="mt-2 text-[11px] text-white/35">
+                  El dueño reparte esta bolsa entre sus usuarios, hasta el máximo indicado.
+                </p>
+              </div>
             )}
 
             <button
