@@ -157,9 +157,15 @@ const AdminUsuarios = () => {
   const [nuevaOrgLogo, setNuevaOrgLogo]           = useState(null);
   const [nuevaOrgLogoPreview, setNuevaOrgLogoPreview] = useState("");
   const [creandoOrg, setCreandoOrg]               = useState(false);
-  // Config multi-empresa de una organización YA existente (editable desde "Marca")
+  // ── Empresa multi-usuario (acción independiente, NO es marca blanca) ──
+  const [showEmpresaModal, setShowEmpresaModal]   = useState(false);
+  const [empresaUser, setEmpresaUser]             = useState(null);
+  const [empresaOrgId, setEmpresaOrgId]           = useState("");
+  const [empresaEsAdmin, setEmpresaEsAdmin]       = useState(false);
   const [orgConfig, setOrgConfig]                 = useState({ max_usuarios: "", pool_consultas: "", pool_infinito: false, max_dispositivos: "" });
   const [orgConfigSaving, setOrgConfigSaving]     = useState(false);
+  const [empresaAudit, setEmpresaAudit]           = useState(null);
+  const [empresaAuditLoading, setEmpresaAuditLoading] = useState(false);
 
   // Consultas realizadas
   const [showConsultasRealizadasModal, setShowConsultasRealizadasModal] = useState(false);
@@ -247,22 +253,6 @@ const AdminUsuarios = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
-  // Precarga la config multi-empresa cuando se selecciona una organización existente.
-  useEffect(() => {
-    if (!selectedOrgId) {
-      setOrgConfig({ max_usuarios: "", pool_consultas: "", pool_infinito: false, max_dispositivos: "" });
-      return;
-    }
-    const org = organizaciones.find((o) => String(o.id) === String(selectedOrgId));
-    if (org) {
-      setOrgConfig({
-        max_usuarios: org.max_usuarios ?? "",
-        pool_consultas: org.pool_consultas ?? "",
-        pool_infinito: !!org.pool_infinito,
-        max_dispositivos: org.max_dispositivos ?? "",
-      });
-    }
-  }, [selectedOrgId, organizaciones]);
 
   // ── Ver consultas ─────────────────────────────────────────────
   const fetchConsultasRealizadas = async (userId, page = 1) => {
@@ -565,9 +555,60 @@ const AdminUsuarios = () => {
     }
   };
 
-  // Actualiza la config multi-empresa de una organización YA existente (PATCH).
+  // Abre el modal independiente de Empresa (multi-usuario) para un usuario.
+  const handleAbrirEmpresa = async (user) => {
+    const org = user?.perfil?.organizacion;
+    setEmpresaUser(user);
+    setEmpresaEsAdmin(!!user?.perfil?.es_admin_organizacion);
+    setEmpresaAudit(null);
+    setShowEmpresaModal(true);
+    await fetchOrganizaciones();
+    if (org?.id) {
+      setEmpresaOrgId(String(org.id));
+      // Precarga desde la lista (OrganizacionAdminSerializer trae pool/max_usuarios…)
+      try {
+        const res = await fetch(`${API_URL}/api/organizaciones/${org.id}/`, { headers: { Authorization: `Token ${token}` } });
+        const o = await res.json();
+        if (res.ok) {
+          setOrgConfig({
+            max_usuarios: o.max_usuarios ?? "",
+            pool_consultas: o.pool_consultas ?? "",
+            pool_infinito: !!o.pool_infinito,
+            max_dispositivos: o.max_dispositivos ?? "",
+          });
+        }
+      } catch { /* noop */ }
+      fetchEmpresaAudit(org.id);
+    } else {
+      setEmpresaOrgId("");
+      setOrgConfig({ max_usuarios: "", pool_consultas: "", pool_infinito: false, max_dispositivos: "" });
+    }
+  };
+
+  const cerrarEmpresaModal = () => {
+    setShowEmpresaModal(false);
+    setEmpresaUser(null);
+    setEmpresaOrgId("");
+    setEmpresaAudit(null);
+  };
+
+  // Trae la MISMA auditoría (IP/canal/dispositivos) que ve el dueño (endpoint compartido).
+  const fetchEmpresaAudit = async (orgId, dias = 30) => {
+    if (!orgId) return;
+    setEmpresaAuditLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/api/empresa/auditoria/?organizacion_id=${orgId}&dias=${dias}`,
+        { headers: { Authorization: `Token ${token}` } });
+      const data = await res.json();
+      if (res.ok) setEmpresaAudit(data);
+    } catch { /* noop */ } finally {
+      setEmpresaAuditLoading(false);
+    }
+  };
+
+  // Actualiza la config multi-empresa de la organización (PATCH) + marca al dueño.
   const handleActualizarEmpresa = async () => {
-    if (!selectedOrgId) return;
+    if (!empresaOrgId) return;
     setOrgConfigSaving(true);
     try {
       const body = { pool_infinito: !!orgConfig.pool_infinito };
@@ -575,7 +616,7 @@ const AdminUsuarios = () => {
       body.max_usuarios = orgConfig.max_usuarios === "" ? null : Number(orgConfig.max_usuarios);
       if (orgConfig.pool_consultas !== "") body.pool_consultas = Number(orgConfig.pool_consultas);
       if (orgConfig.max_dispositivos !== "") body.max_dispositivos = Number(orgConfig.max_dispositivos);
-      const res = await fetch(`${API_URL}/api/organizaciones/${selectedOrgId}/`, {
+      const res = await fetch(`${API_URL}/api/organizaciones/${empresaOrgId}/`, {
         method: "PATCH",
         headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify(body),
@@ -585,7 +626,22 @@ const AdminUsuarios = () => {
         const primerError = Object.values(data)[0];
         throw new Error(Array.isArray(primerError) ? primerError[0] : "No se pudo actualizar la empresa");
       }
-      setOrganizaciones((prev) => prev.map((o) => (String(o.id) === String(selectedOrgId) ? data : o)));
+      setOrganizaciones((prev) => prev.map((o) => (String(o.id) === String(empresaOrgId) ? data : o)));
+
+      // Marcar/desmarcar al usuario como dueño (es_admin_organizacion) de esa org.
+      if (empresaUser?.perfil) {
+        const res2 = await fetch(`${API_URL}/api/perfiles/${empresaUser.perfil.id}/asignar-organizacion/`, {
+          method: "POST",
+          headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ organizacion_id: empresaOrgId, es_admin_organizacion: empresaEsAdmin }),
+        });
+        if (res2.ok) {
+          const d2 = await res2.json();
+          setUsers((prev) => prev.map((u) => u.id === empresaUser.id
+            ? { ...u, perfil: { ...u.perfil, organizacion: d2.organizacion, es_admin_organizacion: d2.es_admin_organizacion } }
+            : u));
+        }
+      }
       setToast({ type: "success", message: "Configuración de empresa actualizada" });
     } catch (e) {
       setToast({ type: "error", message: e.message || "Error al actualizar la empresa" });
@@ -1303,6 +1359,9 @@ const AdminUsuarios = () => {
                       <Accion icon="🧩" tone="teal" label="Configurar fuentes" sub="Captura y sin captura" onClick={() => act(() => handleOpenFuentes(gu))} />
                     )}
                     {gu.perfil && <Accion icon="🎨" tone="fuchsia" label={perfil.organizacion ? `Marca: ${perfil.organizacion.nombre}` : "White-label"} sub="Marca blanca del cliente" onClick={() => act(() => handleAbrirOrganizacion(gu))} />}
+                    {gu.perfil && (perfil.tipo_registro === "empresa" || perfil.organizacion) && (
+                      <Accion icon="🏢" tone="violet" label="Empresa" sub="Usuarios, bolsa, límites e IP" onClick={() => act(() => handleAbrirEmpresa(gu))} />
+                    )}
                     {gu.perfil && <Accion icon="⚡" tone="violet" label={perfil.consultas_masivas ? "Masivas (activas)" : "Masivas"} sub="Consultas masivas" onClick={() => act(() => { setMasivasUser(gu); setMasivasPlanId(""); setShowMasivasModal(true); })} />}
                     <Accion icon="✏️" tone="indigo" label="Editar usuario" sub="Datos de la cuenta" onClick={() => act(() => handleEditUser(gu))} />
                     <Accion icon="📄" tone="green"  label="PDF usuario" sub="Informe individual" disabled={generandoPDFUserId === gu.id} onClick={() => act(() => handleGenerateIndividualPDF(gu))} />
@@ -1709,58 +1768,6 @@ const AdminUsuarios = () => {
               </label>
             )}
 
-            {selectedOrgId && (
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
-                <p className="text-xs font-semibold text-brand mb-2">Empresa multi-usuario</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <ModalInput
-                    label="Máx. usuarios"
-                    type="number"
-                    min="0"
-                    value={orgConfig.max_usuarios}
-                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, max_usuarios: e.target.value }))}
-                    placeholder="Vacío = sin límite"
-                  />
-                  <ModalInput
-                    label="Bolsa (pool consultas)"
-                    type="number"
-                    min="0"
-                    value={orgConfig.pool_consultas}
-                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, pool_consultas: e.target.value }))}
-                    placeholder="0"
-                  />
-                  <ModalInput
-                    label="Máx. dispositivos / usuario"
-                    type="number"
-                    min="1"
-                    value={orgConfig.max_dispositivos}
-                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, max_dispositivos: e.target.value }))}
-                    placeholder="2"
-                  />
-                  <label className="flex items-center gap-2 self-end pb-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={orgConfig.pool_infinito}
-                      onChange={(e) => setOrgConfig((prev) => ({ ...prev, pool_infinito: e.target.checked }))}
-                      className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-brand focus:ring-brand"
-                    />
-                    <span className="text-xs text-white/70">Consultas ilimitadas</span>
-                  </label>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleActualizarEmpresa}
-                  disabled={orgConfigSaving}
-                  className="mt-2 w-full rounded-lg border border-brand/30 bg-brand/10 py-2 text-xs font-bold text-brand transition hover:bg-brand/20 disabled:opacity-50"
-                >
-                  {orgConfigSaving ? "Actualizando…" : "Actualizar empresa"}
-                </button>
-                <p className="mt-2 text-[11px] text-white/35">
-                  El dueño reparte esta bolsa entre sus usuarios, hasta el máximo indicado.
-                </p>
-              </div>
-            )}
-
             <button
               onClick={handleGuardarOrganizacion}
               disabled={guardandoOrg}
@@ -1938,6 +1945,143 @@ const AdminUsuarios = () => {
               )}
             </div>
           </div>
+        </Sheet>
+      )}
+
+      {/* ── Modal: Empresa multi-usuario (independiente de marca blanca) ── */}
+      {showEmpresaModal && (
+        <Sheet
+          onClose={cerrarEmpresaModal}
+          icon="🏢"
+          title="Empresa multi-usuario"
+          subtitle={`Usuario: ${empresaUser?.username || ""}`}
+          wide
+        >
+          {!empresaOrgId ? (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/[0.06] px-4 py-5 text-sm text-amber-100/80">
+              Este usuario no tiene una organización asignada todavía. Asígnala (o créala) en la acción
+              <strong> “Marca blanca”</strong> y vuelve aquí para configurar usuarios, bolsa y límites.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+              {/* Columna 1: configuración */}
+              <div className="flex flex-col gap-3">
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Configuración</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <ModalInput
+                    label="Máx. usuarios"
+                    type="number" min="0"
+                    value={orgConfig.max_usuarios}
+                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, max_usuarios: e.target.value }))}
+                    placeholder="Vacío = sin límite"
+                  />
+                  <ModalInput
+                    label="Bolsa (pool consultas)"
+                    type="number" min="0"
+                    value={orgConfig.pool_consultas}
+                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, pool_consultas: e.target.value }))}
+                    placeholder="0"
+                  />
+                  <ModalInput
+                    label="Máx. dispositivos / usuario"
+                    type="number" min="1"
+                    value={orgConfig.max_dispositivos}
+                    onChange={(e) => setOrgConfig((prev) => ({ ...prev, max_dispositivos: e.target.value }))}
+                    placeholder="2"
+                  />
+                  <label className="flex items-center gap-2 self-end pb-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={orgConfig.pool_infinito}
+                      onChange={(e) => setOrgConfig((prev) => ({ ...prev, pool_infinito: e.target.checked }))}
+                      className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-brand focus:ring-brand"
+                    />
+                    <span className="text-xs text-white/70">Consultas ilimitadas</span>
+                  </label>
+                </div>
+                <label className="flex items-start gap-2.5 rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-3 py-2.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={empresaEsAdmin}
+                    onChange={(e) => setEmpresaEsAdmin(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="text-xs text-white/70 leading-relaxed">
+                    <span className="font-semibold text-white">Dueño de la empresa</span> — este usuario podrá crear
+                    y administrar a sus usuarios hijos, repartir la bolsa y ver la auditoría.
+                  </span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleActualizarEmpresa}
+                  disabled={orgConfigSaving}
+                  className="w-full rounded-xl bg-gradient-to-r from-violet-500 to-purple-600 py-2.5 text-sm font-bold text-white shadow-lg shadow-violet-500/25 transition hover:brightness-110 disabled:opacity-50"
+                >
+                  {orgConfigSaving ? "Guardando…" : "Guardar configuración"}
+                </button>
+              </div>
+
+              {/* Columna 2: auditoría compartida (IP / canal / dispositivos) */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">Auditoría (IP / canal)</div>
+                  <button
+                    type="button"
+                    onClick={() => fetchEmpresaAudit(empresaOrgId)}
+                    className="text-[11px] font-semibold text-violet-300 hover:text-violet-200 transition"
+                  >
+                    ↻ Actualizar
+                  </button>
+                </div>
+                {empresaAuditLoading ? (
+                  <div className="text-xs text-white/40 py-6 text-center">Cargando auditoría…</div>
+                ) : !empresaAudit ? (
+                  <div className="text-xs text-white/40 py-6 text-center">Sin datos aún.</div>
+                ) : (
+                  <>
+                    <div className="rounded-xl border border-white/10 overflow-hidden">
+                      <table className="w-full text-[11px]">
+                        <thead className="bg-white/[0.04] text-white/50">
+                          <tr>
+                            <th className="px-2 py-1.5 text-left font-semibold">Usuario</th>
+                            <th className="px-2 py-1.5 text-right font-semibold">Consultas</th>
+                            <th className="px-2 py-1.5 text-right font-semibold">PDF</th>
+                            <th className="px-2 py-1.5 text-right font-semibold">Logins</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(empresaAudit.resumen_por_usuario || []).map((r) => (
+                            <tr key={r.perfil_id} className="border-t border-white/5 text-white/70">
+                              <td className="px-2 py-1.5 truncate">{r.username}{r.es_admin ? " ★" : ""}</td>
+                              <td className="px-2 py-1.5 text-right">{r.consultas}</td>
+                              <td className="px-2 py-1.5 text-right">{r.descargas_pdf}</td>
+                              <td className="px-2 py-1.5 text-right">{r.logins}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/35 mt-1">Eventos recientes</div>
+                    <div className="max-h-56 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5">
+                      {(empresaAudit.eventos_recientes || []).length === 0 ? (
+                        <div className="text-xs text-white/40 py-4 text-center">Sin eventos en el periodo.</div>
+                      ) : (
+                        (empresaAudit.eventos_recientes || []).map((e, i) => (
+                          <div key={i} className="px-3 py-2 text-[11px] text-white/65 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            <span className="font-mono text-white/40">{new Date(e.fecha).toLocaleString()}</span>
+                            <span className="font-semibold text-white/80">{e.usuario}</span>
+                            <span className="rounded bg-white/10 px-1.5 py-0.5">{e.accion}</span>
+                            {e.canal && <span className="rounded bg-violet-500/20 px-1.5 py-0.5 text-violet-200">{e.canal}</span>}
+                            {e.ip && <span className="font-mono text-white/40">IP {e.ip}</span>}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </Sheet>
       )}
 
