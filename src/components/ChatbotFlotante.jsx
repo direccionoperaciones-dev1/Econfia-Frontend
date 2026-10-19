@@ -7,6 +7,7 @@ import soporteService from "../services/soporteService";
 const WHATSAPP_NUMBER = "573054226582";
 const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=Hola,%20quiero%20m%C3%A1s%20informaci%C3%B3n%20sobre%20ECONFIA`;
 const CHATBOT_BEAR_IMAGE = "/img/chatbot-oso-econfia.png";
+const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 // Sugerencias para usuarios autenticados
 const SUGERENCIAS_USUARIO = [
@@ -163,12 +164,17 @@ export default function ChatbotFlotante() {
 	// Función para encontrar respuesta automática.
 	// Normaliza (sin acentos) y elige la entrada con MÁS coincidencias de palabras
 	// clave, para acertar aunque la pregunta esté escrita de forma distinta.
-	const obtenerRespuestaAutomatica = (texto) => {
+	// Busca en la base de conocimientos. Devuelve { respuesta, puntaje } para que
+	// quien llama decida: si puntaje=0 (sin match claro) y hay sesión, se consulta la IA.
+	const buscarEnKB = (texto) => {
 		const t = normalizar(texto);
 
-		// Saludo simple
+		// Saludo simple (match fuerte, no necesita IA)
 		if (SALUDOS.some((s) => t === s || t.startsWith(s + " ")) && t.length <= 25) {
-			return "¡Hola! Soy el asistente de ECONFIA. Puedo explicarte sobre listas restrictivas, SARLAFT, debida diligencia, PEP, antecedentes y también ayudarte con planes, reportes o soporte. ¿Qué necesitas saber?";
+			return {
+				puntaje: 10,
+				respuesta: "¡Hola! Soy el asistente de ECONFIA. Puedo explicarte sobre listas restrictivas, SARLAFT, debida diligencia, PEP, antecedentes y también ayudarte con planes, reportes o soporte. ¿Qué necesitas saber?",
+			};
 		}
 
 		let mejor = null;
@@ -190,9 +196,29 @@ export default function ChatbotFlotante() {
 			}
 		}
 
-		if (mejor && mejorPuntaje > 0) return mejor.respuesta;
+		if (mejor && mejorPuntaje > 0) return { puntaje: mejorPuntaje, respuesta: mejor.respuesta };
 
-		return "Buena pregunta. Puedo ayudarte con temas como: qué son las listas restrictivas y para qué sirven, SARLAFT/SAGRILAFT, debida diligencia (KYC), PEP, antecedentes (Procuraduría, Contraloría, Policía, Rama Judicial), o con planes, reportes y soporte. ¿Sobre cuál quieres que te explique? También puedes hablar con un asesor por WhatsApp.";
+		return {
+			puntaje: 0,
+			respuesta: "Buena pregunta. Puedo ayudarte con temas como: qué son las listas restrictivas y para qué sirven, SARLAFT/SAGRILAFT, debida diligencia (KYC), PEP, antecedentes (Procuraduría, Contraloría, Policía, Rama Judicial), o con planes, reportes y soporte. ¿Sobre cuál quieres que te explique? También puedes hablar con un asesor por WhatsApp.",
+		};
+	};
+
+	// Consulta a la IA (Gemini) por el backend. Solo usuarios con sesión.
+	const preguntarIA = async (texto) => {
+		const token = localStorage.getItem("token") || localStorage.getItem("authToken") || localStorage.getItem("access");
+		const historial = messages.slice(-8).map((m) => ({
+			rol: m.sender === "user" ? "user" : "assistant",
+			texto: m.texto,
+		}));
+		const res = await fetch(`${API_URL}/api/chatbot/`, {
+			method: "POST",
+			headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+			body: JSON.stringify({ mensaje: texto, historial }),
+		});
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok) throw new Error(data.error || "IA no disponible");
+		return data.respuesta;
 	};
 
 	// Enviar mensaje del usuario
@@ -228,16 +254,33 @@ export default function ChatbotFlotante() {
 				setIsSending(false);
 			}
 		} else {
-			setTimeout(() => {
-				const respuestaBot = obtenerRespuestaAutomatica(texto);
-				const newBotMessage = {
-					id: messages.length + 2,
-					texto: respuestaBot,
-					sender: "bot",
-					timestamp: new Date()
-				};
-				setMessages(prev => [...prev, newBotMessage]);
-			}, 500);
+			const kb = buscarEnKB(texto);
+			// Con match claro, o sin sesión (la IA requiere login): respuesta instantánea.
+			if (kb.puntaje > 0 || !isAuthenticated) {
+				setTimeout(() => {
+					setMessages(prev => [...prev, {
+						id: Date.now(), texto: kb.respuesta, sender: "bot", timestamp: new Date(),
+					}]);
+				}, 400);
+			} else {
+				// Sin match y con sesión: preguntar a la IA.
+				setIsSending(true);
+				try {
+					const respuestaIA = await preguntarIA(texto);
+					setMessages(prev => [...prev, {
+						id: Date.now(), texto: respuestaIA, sender: "bot", timestamp: new Date(),
+					}]);
+				} catch (e) {
+					// Fallback: respuesta genérica de la base de conocimientos.
+					setMessages(prev => [...prev, {
+						id: Date.now(),
+						texto: (e && e.message && e.message !== "IA no disponible") ? e.message : kb.respuesta,
+						sender: "bot", timestamp: new Date(),
+					}]);
+				} finally {
+					setIsSending(false);
+				}
+			}
 		}
 	};
 
@@ -351,7 +394,7 @@ export default function ChatbotFlotante() {
 								<div className="min-w-0">
 									<h3 className="font-bold text-white leading-tight">Soporte ECONFIA</h3>
 									<p className="text-xs text-white/85">
-										{isEscalated ? `Ticket: ${ticketCode}` : "Respuestas automáticas"}
+										{isEscalated ? `Ticket: ${ticketCode}` : (isAuthenticated ? "Asistente con IA" : "Respuestas automáticas")}
 									</p>
 								</div>
 							</div>
