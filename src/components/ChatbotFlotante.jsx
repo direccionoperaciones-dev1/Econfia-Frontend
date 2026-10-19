@@ -11,8 +11,8 @@ const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
 // Sugerencias para usuarios autenticados
 const SUGERENCIAS_USUARIO = [
+	"¿Qué listas debo consultar según mi sector?",
 	"¿Qué son las listas restrictivas?",
-	"¿Por qué son importantes?",
 	"¿Qué es SARLAFT?",
 	"¿Cómo descargo mi PDF?"
 ];
@@ -126,6 +126,9 @@ const KNOWLEDGE_BASE = [
 // Saludos simples
 const SALUDOS = ["hola", "buenas", "buenos dias", "buenas tardes", "buenas noches", "hey", "que tal"];
 
+// Respuesta genérica de ayuda (cuando no hay match ni IA disponible)
+const RESPUESTA_GENERICA = "Buena pregunta. Puedo ayudarte con temas como: qué son las listas restrictivas y para qué sirven, SARLAFT/SAGRILAFT, debida diligencia (KYC), PEP, antecedentes (Procuraduría, Contraloría, Policía, Rama Judicial), o con planes, reportes y soporte. ¿Sobre cuál quieres que te explique? También puedes hablar con un asesor por WhatsApp.";
+
 export default function ChatbotFlotante() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [messages, setMessages] = useState([
@@ -198,10 +201,7 @@ export default function ChatbotFlotante() {
 
 		if (mejor && mejorPuntaje > 0) return { puntaje: mejorPuntaje, respuesta: mejor.respuesta };
 
-		return {
-			puntaje: 0,
-			respuesta: "Buena pregunta. Puedo ayudarte con temas como: qué son las listas restrictivas y para qué sirven, SARLAFT/SAGRILAFT, debida diligencia (KYC), PEP, antecedentes (Procuraduría, Contraloría, Policía, Rama Judicial), o con planes, reportes y soporte. ¿Sobre cuál quieres que te explique? También puedes hablar con un asesor por WhatsApp.",
-		};
+		return { puntaje: 0, respuesta: RESPUESTA_GENERICA };
 	};
 
 	// Consulta a la IA (Gemini) por el backend. Solo usuarios con sesión.
@@ -255,15 +255,18 @@ export default function ChatbotFlotante() {
 			}
 		} else {
 			const kb = buscarEnKB(texto);
-			// Con match claro, o sin sesión (la IA requiere login): respuesta instantánea.
-			if (kb.puntaje > 0 || !isAuthenticated) {
+			// Solo usamos la base de conocimientos cuando el match es FUERTE (una frase
+			// completa, puntaje >= 3). Palabras sueltas (consulta/listas/fuentes) NO cuentan
+			// como match fuerte y se delegan a la IA para una respuesta real y adaptada.
+			const matchFuerte = kb.puntaje >= 3;
+			if (matchFuerte || !isAuthenticated) {
 				setTimeout(() => {
 					setMessages(prev => [...prev, {
 						id: Date.now(), texto: kb.respuesta, sender: "bot", timestamp: new Date(),
 					}]);
 				}, 400);
 			} else {
-				// Sin match y con sesión: preguntar a la IA.
+				// Sin match fuerte y con sesión: preguntar a la IA.
 				setIsSending(true);
 				try {
 					const respuestaIA = await preguntarIA(texto);
@@ -271,10 +274,12 @@ export default function ChatbotFlotante() {
 						id: Date.now(), texto: respuestaIA, sender: "bot", timestamp: new Date(),
 					}]);
 				} catch (e) {
-					// Fallback: respuesta genérica de la base de conocimientos.
+					// Fallback: si el error es de cara al usuario (ej. límite diario) lo mostramos;
+					// si no, la respuesta genérica de ayuda (NO un match débil equivocado).
+					const esMensajeUsuario = e && e.message && e.message !== "IA no disponible";
 					setMessages(prev => [...prev, {
 						id: Date.now(),
-						texto: (e && e.message && e.message !== "IA no disponible") ? e.message : kb.respuesta,
+						texto: esMensajeUsuario ? e.message : RESPUESTA_GENERICA,
 						sender: "bot", timestamp: new Date(),
 					}]);
 				} finally {
