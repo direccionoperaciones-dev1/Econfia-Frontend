@@ -7,10 +7,14 @@ import CardDni from "../components/CardDni";
 import Terminos from "../components/Terminos";
 import { FaCogs } from "react-icons/fa";
 import ConsultaMasivaModal from "../components/ConsultaMasivaModal";
+import ModalSeleccionFuentes from "../components/ModalSeleccionFuentes";
 
 
 export default function ConsultaBasicElemnt() {
   const [puedeUsarMasivas, setPuedeUsarMasivas] = useState(false);
+  const [puedeSeleccionar, setPuedeSeleccionar] = useState(false);
+  const [showSeleccion, setShowSeleccion] = useState(false);
+  const [seleccionadas, setSeleccionadas] = useState([]);
   useEffect(() => {
     const token = localStorage.getItem("token");
     const API = process.env.REACT_APP_API_URL;
@@ -21,6 +25,7 @@ export default function ConsultaBasicElemnt() {
         const planes = data.perfil?.planes || [];
         const planActual = planes.find((p) => p.nombre === "econfiafast");
         setPuedeUsarMasivas(planActual ? ids.includes(planActual.id) : false);
+        setPuedeSeleccionar(Boolean(data.perfil?.fast_seleccion_fuentes));
       })
       .catch(() => {});
   }, []);
@@ -65,6 +70,10 @@ export default function ConsultaBasicElemnt() {
     };
     if (fechaExpedicion) {
       bodyData.fecha_expedicion = fechaExpedicion;
+    }
+    // Selección de fuentes (solo si el admin la habilitó para este usuario).
+    if (puedeSeleccionar && seleccionadas.length > 0) {
+      bodyData.lista_nombres = seleccionadas;
     }
     try {
       const token = localStorage.getItem("token");
@@ -213,6 +222,19 @@ export default function ConsultaBasicElemnt() {
                   {loading ? "Consultando..." : "Consultar EconfiaFast"}
                 </button>
 
+                {/* Selección de fuentes — solo si el admin lo habilitó */}
+                {puedeSeleccionar && (
+                  <button
+                    type="button"
+                    onClick={() => setShowSeleccion(true)}
+                    className="mt-1.5 w-full px-4 py-2 rounded-lg font-semibold text-xs border border-brand-2/40 text-brand-2 hover:bg-brand-2/15 hover:border-brand-2/60 transition-all duration-300"
+                  >
+                    {seleccionadas.length > 0
+                      ? `Fuentes seleccionadas: ${seleccionadas.length} (cambiar)`
+                      : "Seleccionar fuentes (opcional)"}
+                  </button>
+                )}
+
                 {/* Botón consulta masiva — solo si el admin lo habilitó */}
                 {puedeUsarMasivas && (
                   <button
@@ -253,6 +275,16 @@ export default function ConsultaBasicElemnt() {
         isOpen={showMasiva}
         onClose={() => setShowMasiva(false)}
         tipoConsulta="econfiafast"
+      />
+      {/* Modal: Selección de fuentes para Fast */}
+      <ModalSeleccionFuentes
+        isOpen={showSeleccion}
+        onClose={() => setShowSeleccion(false)}
+        onConfirm={(nombres) => {
+          setSeleccionadas(nombres);
+          setShowSeleccion(false);
+        }}
+        title="Selecciona las fuentes para Econfia Fast"
       />
     </section>
   );

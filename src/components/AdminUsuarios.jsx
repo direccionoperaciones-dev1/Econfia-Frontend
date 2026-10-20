@@ -817,6 +817,32 @@ const AdminUsuarios = () => {
     }
   };
 
+  // Toggle por usuario: habilitar/deshabilitar selección de fuentes en Econfia Fast.
+  const handleToggleFastSeleccion = async (user) => {
+    if (!user.perfil?.id) {
+      setToast({ type: "error", message: "Este usuario no tiene perfil" });
+      return;
+    }
+    const nuevo = !user.perfil?.fast_seleccion_fuentes;
+    // Optimista
+    setUsers((prev) => prev.map((u) => u.id === user.id
+      ? { ...u, perfil: { ...u.perfil, fast_seleccion_fuentes: nuevo } } : u));
+    try {
+      const res = await fetch(`${API_URL}/api/perfiles/${user.perfil.id}/`, {
+        method: "PATCH",
+        headers: { Authorization: `Token ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ fast_seleccion_fuentes: nuevo }),
+      });
+      if (!res.ok) throw new Error();
+      setToast({ type: "success", message: `Selección de fuentes en Fast ${nuevo ? "activada" : "desactivada"}` });
+    } catch {
+      // Revertir
+      setUsers((prev) => prev.map((u) => u.id === user.id
+        ? { ...u, perfil: { ...u.perfil, fast_seleccion_fuentes: !nuevo } } : u));
+      setToast({ type: "error", message: "No se pudo cambiar la selección de fuentes en Fast" });
+    }
+  };
+
   // ── Datos filtrados y paginados ───────────────────────────────
   const filteredUsers = users
     .filter((u) => {
@@ -1391,6 +1417,7 @@ const AdminUsuarios = () => {
                       <Accion icon="🏢" tone="violet" label="Empresa" sub="Usuarios, bolsa, límites e IP" onClick={() => act(() => handleAbrirEmpresa(gu))} />
                     )}
                     {gu.perfil && <Accion icon="⚡" tone="violet" label={perfil.consultas_masivas ? "Masivas (activas)" : "Masivas"} sub="Consultas masivas" onClick={() => act(() => { setMasivasUser(gu); setMasivasPlanId(""); setShowMasivasModal(true); })} />}
+                    {gu.perfil && <Accion icon="🎯" tone={perfil.fast_seleccion_fuentes ? "green" : "sky"} label={perfil.fast_seleccion_fuentes ? "Fast: selección ON" : "Fast: selección OFF"} sub="Elegir fuentes en Fast" onClick={() => act(() => handleToggleFastSeleccion(gu))} />}
                     <Accion icon="✏️" tone="indigo" label="Editar usuario" sub="Datos de la cuenta" onClick={() => act(() => handleEditUser(gu))} />
                     <Accion icon="📄" tone="green"  label="PDF usuario" sub="Informe individual" disabled={generandoPDFUserId === gu.id} onClick={() => act(() => handleGenerateIndividualPDF(gu))} />
                     <Accion icon={gu.is_active ? "🔌" : "✅"} tone={gu.is_active ? "amber" : "green"} label={gu.is_active ? "Desactivar" : "Activar"} sub="Estado de la cuenta" onClick={() => act(() => handleToggleActive(gu))} />

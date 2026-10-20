@@ -50,6 +50,26 @@ const urlOficialResultado = (resultado) => {
   return candidates.map(urlHttpSegura).find(Boolean) || "";
 };
 
+// Fecha solo-fecha ("YYYY-MM-DD"): JS la toma como medianoche UTC y en hora de
+// Colombia (UTC-5) retrocede un dia. Se formatea como fecha LOCAL para NO restar el dia.
+const fechaSoloLocal = (value) => {
+  if (!value) return "—";
+  const m = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) {
+    const [, anio, mes, dia] = m;
+    return new Date(Number(anio), Number(mes) - 1, Number(dia)).toLocaleDateString("es-CO");
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? String(value) : d.toLocaleDateString("es-CO");
+};
+
+// Año sin dejar que UTC desplace un 01-01 al año anterior.
+const anioLocal = (value) => {
+  if (!value) return null;
+  const m = String(value).match(/(\d{4})/);
+  return m ? Number(m[1]) : null;
+};
+
 const fechaHoraConsulta = (value) => {
   if (!value) return "Fecha y hora no disponibles";
   const date = new Date(value);
@@ -205,9 +225,10 @@ function resultadoCard(r, i, total, mediaBase, fechaConsulta) {
   const scoreNum = parseFloat(r?.score);
   const hallazgo = Number.isFinite(scoreNum) && scoreNum >= 2;
   const nombreBusqueda = String(r?.fuente || r?.fuente_nombre || nombreAmigable || "fuente").toLowerCase().replace(/"/g, "");
+  const tipoBusqueda = String(r?.tipo_fuente || r?.tipo || infoFuente.categoria || "").toLowerCase().replace(/"/g, "");
 
   return `
-  <section id="f${i}" data-nombre="${nombreBusqueda}" data-hallazgo="${hallazgo ? 1 : 0}" class="fuente-card scroll-mt-28 bg-brand-surface rounded-2xl border ${hallazgo ? "border-rose-500/50" : "border-brand-border/90"} overflow-hidden shadow-hud">
+  <section id="f${i}" data-nombre="${nombreBusqueda}" data-tipo="${tipoBusqueda}" data-hallazgo="${hallazgo ? 1 : 0}" class="fuente-card scroll-mt-28 bg-brand-surface rounded-2xl border ${hallazgo ? "border-rose-500/50" : "border-brand-border/90"} overflow-hidden shadow-hud">
     <div class="bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-800 px-6 py-3 flex items-center justify-between gap-2">
       <div class="flex items-center gap-3 min-w-0">
         <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
@@ -258,9 +279,9 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
   const tipoDoc = cand.doc_type || cand.tipo_doc || "CC";
   const estadoCedula = cand.estado_cedula || cand.estado || "—";
   const birth = cand.birth_date || cand.fecha_nacimiento || null;
-  const anio = birth ? new Date(birth).getFullYear() : null;
+  const anio = anioLocal(birth);
   const edad = anio ? Math.max(0, new Date().getFullYear() - anio) : "—";
-  const fechaExp = cand.fecha_expedicion ? new Date(cand.fecha_expedicion).toLocaleDateString() : "—";
+  const fechaExp = cand.fecha_expedicion ? fechaSoloLocal(cand.fecha_expedicion) : "—";
   const lugarExp = [cand.municipio_expedicion, cand.departamento_expedicion].filter(Boolean).join(" (") + (cand.departamento_expedicion ? ")" : "") || "—";
   const fecha = consulta?.fecha ? new Date(consulta.fecha).toLocaleString() : new Date().toLocaleString();
 
@@ -300,28 +321,46 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
     .map((r, idx) => resultadoCard(r, idx + 1, totalFuentes, mediaBase, consulta?.fecha))
     .join("\n");
 
-  // Atajos: fuentes con hallazgo (score >= 2) para saltar directo.
+  // Atajos: fuentes con hallazgo (score >= 2) para saltar directo a la fuente REAL del hallazgo.
   const conHallazgo = items
     .map((r, idx) => ({ r, idx: idx + 1, n: parseFloat(r?.score) }))
     .filter((x) => Number.isFinite(x.n) && x.n >= 2);
   const chips = conHallazgo
-    .map((x) => `<a href="#f${x.idx}" class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-950/60 border border-rose-500/40 text-rose-200 text-xs font-semibold hover:bg-rose-900/70 transition">${esc(x.r?.fuente || x.r?.fuente_nombre || "Fuente")}</a>`)
+    .map((x) => `<a href="#f${x.idx}" class="shrink-0 inline-flex items-center gap-1 px-3 py-1 rounded-full bg-rose-950/60 border border-rose-500/40 text-rose-200 text-xs font-semibold hover:bg-rose-900/70 hover:border-rose-400 transition">⚠ ${esc(x.r?.fuente || x.r?.fuente_nombre || "Fuente")}</a>`)
     .join("");
+
+  // Chips rápidos por TIPO de fuente: salta a la primera fuente de ese tipo.
+  const tiposUnicos = [];
+  items.forEach((r) => {
+    const t = String(r?.tipo_fuente || r?.tipo || "").trim();
+    if (t && !tiposUnicos.some((x) => x.toLowerCase() === t.toLowerCase())) tiposUnicos.push(t);
+  });
+  const chipsTipo = tiposUnicos
+    .map((t) => `<button type="button" data-tipo-jump="${esc(t.toLowerCase())}" class="chip-tipo shrink-0 inline-flex items-center px-3 py-1 rounded-full bg-brand-card border border-brand-border text-slate-300 text-xs font-semibold hover:border-brand-cyan/60 hover:text-brand-cyan transition">${esc(t)}</button>`)
+    .join("");
+
   const barraBusqueda = `
-  <div class="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-3 bg-brand-navy/95 backdrop-blur-md border-b border-brand-border/70">
+  <div class="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-3 bg-brand-navy/95 backdrop-blur-md border-b border-brand-border/70 space-y-2.5">
     <div class="flex flex-col lg:flex-row lg:items-center gap-3">
       <div class="relative flex-1 min-w-0">
-        <input id="buscar-fuente" type="text" placeholder="Buscar fuente... (ej. policía, RUES, OFAC)" autocomplete="off"
-          class="w-full px-4 py-2 rounded-lg bg-brand-card border border-brand-border text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-brand-cyan/60"/>
+        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"></path></svg>
+        <input id="buscar-fuente" type="text" placeholder="Buscar fuente o tipo... (ej. policía, RUES, judicial)" autocomplete="off"
+          class="w-full pl-9 pr-16 py-2 rounded-lg bg-brand-card border border-brand-border text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-brand-cyan/60 focus:ring-2 focus:ring-brand-cyan/20 transition"/>
         <span id="buscar-contador" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500"></span>
       </div>
       ${conHallazgo.length
         ? `<div class="flex items-center gap-2 overflow-x-auto pb-1">
-             <span class="text-xs text-rose-300 font-semibold shrink-0">⚠ ${conHallazgo.length} con hallazgo:</span>
+             <span class="text-xs text-rose-300 font-semibold shrink-0">${conHallazgo.length} con hallazgo:</span>
              ${chips}
            </div>`
         : `<span class="text-xs text-brand-emerald font-semibold shrink-0">✓ Sin hallazgos</span>`}
     </div>
+    ${chipsTipo
+      ? `<div class="flex items-center gap-2 overflow-x-auto pb-0.5">
+           <span class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold shrink-0">Ir a tipo:</span>
+           ${chipsTipo}
+         </div>`
+      : ""}
   </div>`;
 
   return `<!DOCTYPE html>
@@ -523,26 +562,71 @@ ${barraBusqueda}
     var cards = Array.prototype.slice.call(document.querySelectorAll('.fuente-card'));
     var total = cards.length;
 
-    function filtrar() {
-      var q = (input.value || '').trim().toLowerCase();
-      var visibles = 0;
-      cards.forEach(function (c) {
-        var match = !q || (c.getAttribute('data-nombre') || '').indexOf(q) !== -1
-          || (c.textContent || '').toLowerCase().indexOf(q) !== -1;
-        c.style.display = match ? '' : 'none';
-        if (match) visibles++;
-      });
-      contador.textContent = q ? (visibles + '/' + total) : '';
+    function resaltar(el) {
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      el.classList.add('ring-2', 'ring-brand-cyan');
+      setTimeout(function () { el.classList.remove('ring-2', 'ring-brand-cyan'); }, 1600);
     }
-    if (input) input.addEventListener('input', filtrar);
 
-    // Scroll suave para los atajos y el botón top
+    // Devuelve las tarjetas que coinciden con el texto (nombre, tipo o contenido).
+    function coincidencias(q) {
+      if (!q) return [];
+      return cards.filter(function (c) {
+        return (c.getAttribute('data-nombre') || '').indexOf(q) !== -1
+          || (c.getAttribute('data-tipo') || '').indexOf(q) !== -1
+          || (c.textContent || '').toLowerCase().indexOf(q) !== -1;
+      });
+    }
+
+    // Búsqueda RÁPIDA: no esconde nada, salta a la mejor coincidencia.
+    // Prioriza la fuente con hallazgo (data-hallazgo=1) para mandar al hallazgo REAL.
+    function mejorCoincidencia(matches) {
+      if (!matches.length) return null;
+      var conHallazgo = matches.filter(function (c) { return c.getAttribute('data-hallazgo') === '1'; });
+      return (conHallazgo[0] || matches[0]);
+    }
+
+    var ultimaBusqueda = '';
+    var indiceCiclo = 0;
+
+    if (input) {
+      // Al escribir: actualiza el contador y salta suave a la mejor coincidencia.
+      input.addEventListener('input', function () {
+        var q = (input.value || '').trim().toLowerCase();
+        var matches = coincidencias(q);
+        contador.textContent = q ? (matches.length + ' encontrada' + (matches.length === 1 ? '' : 's')) : '';
+        ultimaBusqueda = q;
+        indiceCiclo = 0;
+        if (matches.length) resaltar(mejorCoincidencia(matches));
+      });
+      // Enter: cicla entre las coincidencias (siguiente cada vez).
+      input.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        var q = (input.value || '').trim().toLowerCase();
+        var matches = coincidencias(q);
+        if (!matches.length) return;
+        if (q !== ultimaBusqueda) { ultimaBusqueda = q; indiceCiclo = 0; }
+        else { indiceCiclo = (indiceCiclo + 1) % matches.length; }
+        resaltar(matches[indiceCiclo]);
+      });
+    }
+
+    // Chips por tipo: saltan a la primera fuente de ese tipo.
+    document.querySelectorAll('[data-tipo-jump]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var t = this.getAttribute('data-tipo-jump');
+        var el = cards.filter(function (c) { return (c.getAttribute('data-tipo') || '') === t; })[0];
+        resaltar(el);
+      });
+    });
+
+    // Scroll suave para los atajos de hallazgo y el botón top
     document.querySelectorAll('a[href^="#f"]').forEach(function (a) {
       a.addEventListener('click', function (e) {
         var el = document.getElementById(this.getAttribute('href').slice(1));
-        if (el) { e.preventDefault(); el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          el.classList.add('ring-2','ring-brand-cyan');
-          setTimeout(function(){ el.classList.remove('ring-2','ring-brand-cyan'); }, 1600); }
+        if (el) { e.preventDefault(); resaltar(el); }
       });
     });
 
