@@ -1,5 +1,5 @@
 import TablaResultados from "../components/TablaResultados";
-import CargandoResultados from "../components/CargandoResultados";
+import SkeletonResultados from "../components/SkeletonResultados";
 import LiveQueryModal from "../components/LiveQueryModal";
 import DetalleResultados from "../components/DetalleResultados";
 import ExperianDetalleResultados from "../components/ExperianDetalleResultados";
@@ -713,7 +713,7 @@ export default function Resultados() {
     }
   }, [data, location.state]);
 
-  if (loading) return <CargandoResultados />;
+  if (loading) return <SkeletonResultados />;
 
   // ---- Filtrar datos ----
   const filteredData = data.filter((item) => {
