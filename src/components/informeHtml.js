@@ -340,7 +340,7 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
     .join("");
 
   const barraBusqueda = `
-  <div class="sticky top-0 z-40 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-3 bg-brand-navy/95 backdrop-blur-md border-b border-brand-border/70 space-y-2.5">
+  <div class="sticky top-16 z-40 mt-4 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-3 bg-brand-navy/95 backdrop-blur-md border-b border-brand-border/70 space-y-2.5">
     <div class="flex flex-col lg:flex-row lg:items-center gap-3">
       <div class="relative flex-1 min-w-0">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"></path></svg>
@@ -551,7 +551,9 @@ ${barraBusqueda}
 
 </div>
 
-<!-- Botón volver arriba -->
+<!-- Botones: ir al inicio / ir al final -->
+<button id="btn-final" title="Ir al final"
+  class="fixed bottom-20 right-6 z-50 w-12 h-12 rounded-full bg-brand-cyan text-brand-navy shadow-hud flex items-center justify-center font-bold text-xl transition-opacity">↓</button>
 <button id="btn-top" title="Volver al inicio"
   class="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-brand-emerald text-brand-navy shadow-neon-green flex items-center justify-center font-bold text-xl opacity-0 pointer-events-none transition-opacity">↑</button>
 
@@ -631,12 +633,22 @@ ${barraBusqueda}
     });
 
     var btnTop = document.getElementById('btn-top');
-    window.addEventListener('scroll', function () {
-      var mostrar = window.scrollY > 400;
-      btnTop.style.opacity = mostrar ? '1' : '0';
-      btnTop.style.pointerEvents = mostrar ? 'auto' : 'none';
-    });
+    var btnFinal = document.getElementById('btn-final');
+    function actualizarBotones() {
+      var mostrarTop = window.scrollY > 400;
+      btnTop.style.opacity = mostrarTop ? '1' : '0';
+      btnTop.style.pointerEvents = mostrarTop ? 'auto' : 'none';
+      // Oculta "ir al final" cuando ya estás abajo del todo.
+      if (btnFinal) {
+        var alFondo = (window.innerHeight + window.scrollY) >= (document.body.scrollHeight - 40);
+        btnFinal.style.opacity = alFondo ? '0' : '1';
+        btnFinal.style.pointerEvents = alFondo ? 'none' : 'auto';
+      }
+    }
+    window.addEventListener('scroll', actualizarBotones);
+    actualizarBotones();
     btnTop.addEventListener('click', function () { window.scrollTo({ top: 0, behavior: 'smooth' }); });
+    if (btnFinal) btnFinal.addEventListener('click', function () { window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); });
   })();
 </script>
 </body></html>`;
