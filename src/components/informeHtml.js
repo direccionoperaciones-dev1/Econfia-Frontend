@@ -551,11 +551,11 @@ ${barraBusqueda}
 
 </div>
 
-<!-- Botones: ir al inicio / ir al final -->
+<!-- Botones: ir al inicio / ir al final (arriba del chatbot, sin sobreponerse) -->
 <button id="btn-final" title="Ir al final"
-  class="fixed bottom-20 right-6 z-50 w-12 h-12 rounded-full bg-brand-cyan text-brand-navy shadow-hud flex items-center justify-center font-bold text-xl transition-opacity">↓</button>
+  class="fixed bottom-44 right-4 z-40 w-10 h-10 rounded-full bg-brand-cyan text-brand-navy shadow-hud flex items-center justify-center font-bold text-lg transition-opacity">↓</button>
 <button id="btn-top" title="Volver al inicio"
-  class="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full bg-brand-emerald text-brand-navy shadow-neon-green flex items-center justify-center font-bold text-xl opacity-0 pointer-events-none transition-opacity">↑</button>
+  class="fixed bottom-32 right-4 z-40 w-10 h-10 rounded-full bg-brand-emerald text-brand-navy shadow-neon-green flex items-center justify-center font-bold text-lg opacity-0 pointer-events-none transition-opacity">↑</button>
 
 <script>
   (function () {
