@@ -16,7 +16,7 @@ const blobToDataURL = (blob) =>
     r.readAsDataURL(blob);
   });
 
-const ConsultaSlide = ({ consultaId, consulta: consultaProp }) => {
+const ConsultaSlide = ({ consultaId, consulta: consultaProp, refreshKey = 0 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [html, setHtml] = useState("");
@@ -71,7 +71,7 @@ const ConsultaSlide = ({ consultaId, consulta: consultaProp }) => {
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [consultaId, consultaProp?.tipo_consulta]);
+  }, [consultaId, consultaProp?.tipo_consulta, refreshKey]);
 
   return (
     <div className="relative w-full h-full min-h-[72vh] bg-[#050914]">

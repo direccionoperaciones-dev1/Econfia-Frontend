@@ -538,6 +538,9 @@ export default function Resultados() {
   const [loading, setLoading] = useState(true);
   const [consultaSeleccionada, setConsultaSeleccionada] = useState(null);
   const swiperRef = useRef(null);
+  // Se incrementa cada vez que se abre "Ver informe" para forzar que el preview
+  // vuelva a traer los resultados (refleja revalidaciones de fuentes offline).
+  const [informeRefresh, setInformeRefresh] = useState(0);
 
   useEffect(() => {
     window.dispatchEvent(
@@ -1131,7 +1134,7 @@ export default function Resultados() {
               onChangeExperianPdfTheme={handleExperianPdfThemeChange}
               onBack={() => setConsultaSeleccionada(null)}
               onOpenIndividual={() => setShowModalIndividual(true)}
-              onVerPdf={() => swiperRef.current?.slideTo(1)}
+              onVerPdf={() => { setInformeRefresh((k) => k + 1); swiperRef.current?.slideTo(1); }}
               pdfReady={
                 !!(
                   (data.find((r) => r.id === consultaSeleccionada?.id) ||
@@ -1346,7 +1349,7 @@ export default function Resultados() {
             </SwiperSlide>
 
             <SwiperSlide className="flex flex-row h-full min-h-0">
-            <ConsultaSlide consultaId={consultaSeleccionada.id} consulta={consultaSeleccionada} />
+            <ConsultaSlide consultaId={consultaSeleccionada.id} consulta={consultaSeleccionada} refreshKey={informeRefresh} />
             </SwiperSlide>
             {/* Slide 3 */}
           </Swiper>
