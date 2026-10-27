@@ -4,6 +4,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 
 import Terminos from "../components/Terminos";
+import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import Toast from "../components/Toast";
 import { EXPERIAN_DOCUMENT_OPTIONS, getExperianSubjectField } from "../utils/experian";
 
@@ -221,6 +222,7 @@ export default function ConsultaReconocer() {
                       <span className="text-xs text-content/85">Confirmo consentimiento del titular</span>
                     </label>
                   </div>
+                <AvisoTratamientoDatos className="mt-1" />
 
                   <button
                     type="submit"

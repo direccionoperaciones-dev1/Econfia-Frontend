@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
 import CardDni from "../components/CardDni";
 import Terminos from "../components/Terminos";
+import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import { FaCogs } from "react-icons/fa";
 import ConsultaMasivaModal from "../components/ConsultaMasivaModal";
 import ModalSeleccionFuentes from "../components/ModalSeleccionFuentes";
@@ -210,6 +211,7 @@ export default function ConsultaBasicElemnt() {
                     </span>
                   </label>
                 </div>
+                <AvisoTratamientoDatos className="mt-1" />
                 <button
                   type="submit"
                   disabled={!tipoDoc || !cedula || !acepta || !consentimiento || loading}

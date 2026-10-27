@@ -42,6 +42,9 @@ import PoliticaPrivacidad from "./pages/PoliticaPrivacidad";
 import SmsTerminos from "./pages/SmsTerminos";
 import SmsPoliticaPrivacidad from "./pages/SmsPoliticaPrivacidad";
 import EliminarCuenta from "./pages/EliminarCuenta";
+import PoliticaCookies from "./pages/PoliticaCookies";
+import CookieBanner from "./components/CookieBanner";
+import VerificarConsulta from "./pages/VerificarConsulta";
 import TitulosValidationForm from "./views/TitulosValidationForm";
 import AdminPanel from "./pages/AdminPanel";
 import AdminUsuarios from "./components/AdminUsuarios";
@@ -772,6 +775,7 @@ export default function App() {
           <ParticlesBackground />
           <ChatbotFlotante />
           <SoundManager />
+          <CookieBanner />
           <Routes>
             {/* Públicas */}
             <Route path="/"                  element={<Home />}             />
@@ -797,6 +801,9 @@ export default function App() {
             {/* Legales públicas (requeridas por Google Play) */}
             <Route path="/terminos"            element={<TerminosLegales />}    />
             <Route path="/politica-privacidad" element={<PoliticaPrivacidad />} />
+            <Route path="/politica-cookies"    element={<PoliticaCookies />}    />
+            <Route path="/verificar-consulta"         element={<VerificarConsulta />} />
+            <Route path="/verificar-consulta/:codigo" element={<VerificarConsulta />} />
             {/* Legales públicas del programa SMS de econfiaWallet (requeridas por Twilio) */}
             <Route path="/sms-terms"           element={<SmsTerminos />}            />
             <Route path="/sms-privacy-policy"  element={<SmsPoliticaPrivacidad />}  />

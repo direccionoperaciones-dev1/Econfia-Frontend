@@ -19,6 +19,7 @@ import ReconocerDetalleResultados from "../components/ReconocerDetalleResultados
 import { AssetSearchResultados } from "./ConsultaInmueblesSNR";
 import LogoOrganizacion from "../components/LogoOrganizacion";
 import Terminos from "../components/Terminos";
+import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import Toast from "../components/Toast";
 
 const DOCUMENTOS = ["CC", "TI", "CE", "PPT", "PEP", "NIT"];
@@ -500,6 +501,7 @@ export default function ConsultaConsolidadoRiesgo() {
               <input type="checkbox" checked={consentimiento} onChange={(e) => setConsentimiento(e.target.checked)} className="accent-cyan-500" />
               Confirmo la autorización del titular (incluye DataCrédito y SNR)
             </label>
+            <AvisoTratamientoDatos className="mt-2" />
             <button disabled={loading || !cedula.trim() || !acepta || !consentimiento} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
               {loading ? <RefreshCw className="animate-spin" size={17} /> : <Database size={17} />}
               {loading ? "Consultando..." : "Consultar Integrity 360"}

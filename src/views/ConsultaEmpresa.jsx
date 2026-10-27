@@ -16,6 +16,7 @@ import {
   FaUserTie,
 } from "react-icons/fa";
 import Terminos from "../components/Terminos";
+import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import {
   Bar,
   BarChart,
@@ -921,6 +922,7 @@ export default function ConsultaEmpresa() {
                   </div>
                 </div>
 
+                <AvisoTratamientoDatos className="mb-3" />
                 <button
                   type="submit"
                   disabled={loading}

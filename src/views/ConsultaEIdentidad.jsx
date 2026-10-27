@@ -3,6 +3,7 @@ import LogoOrganizacion from "../components/LogoOrganizacion";
 import { createPortal } from "react-dom";
 import Toast from "../components/Toast";
 import Terminos from "../components/Terminos";
+import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import ConsultaMasivaModal from "../components/ConsultaMasivaModal";
 
 const CAMPO_LABEL = {
@@ -233,6 +234,7 @@ export default function ConsultaEIdentidad() {
                     </span>
                   </label>
                 </div>
+                <AvisoTratamientoDatos className="mt-1" />
 
                 <button
                   type="submit"

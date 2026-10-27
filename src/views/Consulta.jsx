@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
 import CardDni from "../components/CardDni";
 import Terminos from "../components/Terminos";
+import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import ConsultaMasivaModal from "../components/ConsultaMasivaModal";
 
 
@@ -523,6 +524,7 @@ export default function Consulta() {
                       </span>
                     </label>
                   </div>
+                  <AvisoTratamientoDatos className="mt-1" />
 
                   {/* Botón principal */}
                   <button

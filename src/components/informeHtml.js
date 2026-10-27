@@ -17,6 +17,9 @@ const esc = (v) =>
 
 const esImagen = (archivo) =>
   typeof archivo === "string" && /\.(png|jpe?g|webp|gif)$/i.test(archivo.trim());
+// Algunas fuentes de captura generan la evidencia como PDF (ej. rama_judicial).
+const esPdf = (archivo) =>
+  typeof archivo === "string" && /\.pdf$/i.test(archivo.trim());
 
 const urlHttpSegura = (value) => {
   const raw = typeof value === "string" ? value.trim() : "";
@@ -190,6 +193,10 @@ function resultadoCard(r, i, total, mediaBase, fechaConsulta) {
   const imgUrl = hasImg
     ? `${mediaBase}${String(r.archivo).replace(/^.*?media[\\/]/, "")}`
     : "";
+  const hasPdf = !hasImg && esPdf(r?.archivo);
+  const pdfUrl = hasPdf
+    ? `${mediaBase}${String(r.archivo).replace(/^.*?media[\\/]/, "")}`
+    : "";
   const urlOficial = urlOficialResultado(r);
   const extra = r?.datos_extra && typeof r.datos_extra === "object" ? r.datos_extra : {};
   const fechaInicio = fechaHoraConsulta(
@@ -218,6 +225,21 @@ function resultadoCard(r, i, total, mediaBase, fechaConsulta) {
             ? `<a href="${esc(urlOficial)}" target="_blank" rel="noopener noreferrer" title="Abrir la fuente oficial" class="block w-full max-w-3xl cursor-pointer transition hover:opacity-90">${imagenEvidencia}</a>`
             : imagenEvidencia}
         </div>
+      </div>
+    </div>`
+    : hasPdf
+    ? `
+    <div class="bg-brand-card/60 rounded-xl border border-brand-border p-4 mt-4">
+      <div class="flex items-center gap-2 text-xs font-mono text-slate-300 mb-3">
+        <svg class="w-4 h-4 text-brand-cyan" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+        <span class="font-bold uppercase tracking-wider text-white">Evidencia capturada (PDF)</span>
+      </div>
+      <div class="rounded-xl overflow-hidden border border-slate-700/80 bg-slate-900 shadow-2xl">
+        <div class="bg-[#111827] px-4 py-2 flex items-center justify-between gap-2 border-b border-slate-700/80">
+          <span class="text-[11px] font-mono text-slate-400 truncate">${fuente}</span>
+          <a href="${esc(pdfUrl)}" target="_blank" rel="noopener noreferrer" class="shrink-0 text-[11px] font-bold text-brand-cyan hover:opacity-80">Abrir / Descargar PDF ↗</a>
+        </div>
+        <iframe src="${esc(pdfUrl)}" class="w-full" style="height:520px; border:0; background:#fff;" title="Evidencia ${fuente}" loading="lazy"></iframe>
       </div>
     </div>`
     : "";
@@ -539,6 +561,8 @@ ${barraBusqueda}
     <div class="min-w-0 flex-1 text-center sm:text-left">
       <p class="text-[11px] font-mono tracking-widest text-brand-emerald uppercase font-bold mb-1">Verificación del informe</p>
       <p class="text-sm text-slate-200 font-sans">Escanea el QR o abre el enlace para verificar la autenticidad de este reporte.</p>
+      ${consulta?.codigo_rastreo ? `<p class="text-xs text-slate-200 font-mono mt-2">Código de rastreo: <span class="font-bold text-white">${esc(consulta.codigo_rastreo)}</span></p>
+      <p class="text-[11px] text-slate-400 font-sans">Con este código cualquiera puede auditar quién, cuándo y desde qué IP se hizo la consulta, y que se afirmó el consentimiento del titular.</p>` : ""}
       ${verifyUrl ? `<a href="${esc(verifyUrl)}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-2 mt-2 px-4 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-brand-emerald border border-brand-emerald/40 font-mono text-xs font-bold transition">Verificar este informe →</a>
       <p class="text-[11px] text-slate-400 font-mono mt-2 break-all">${esc(verifyUrl)}</p>` : ""}
     </div>

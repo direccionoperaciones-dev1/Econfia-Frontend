@@ -81,6 +81,7 @@ export default function AdminPlanes() {
   const [proposalForm, setProposalForm] = useState(newProposal());
   const [editId, setEditId] = useState(null);
   const [editingProposalId, setEditingProposalId] = useState(null);
+  const [proposalImage, setProposalImage] = useState(null); // File | null (imagen opcional)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState(null);
@@ -98,7 +99,8 @@ export default function AdminPlanes() {
   const api = async (path, options = {}) => {
     const response = await fetch(`${API_URL}${path}`, {
       ...options,
-      headers: { ...authHeaders, ...(options.body ? { "Content-Type": "application/json" } : {}), ...options.headers },
+      // No fijar Content-Type cuando el body es FormData: el navegador agrega el boundary.
+      headers: { ...authHeaders, ...(options.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : {}), ...options.headers },
     });
     if (!response.ok) throw new Error(await parseError(response, "No fue posible completar la operación."));
     return response.status === 204 ? null : response.json();
@@ -234,7 +236,7 @@ export default function AdminPlanes() {
       precio_consulta_adicional: current.precio_consulta_adicional === "" ? "" : String(convertCurrency(current.precio_consulta_adicional, source, currency, trm)),
     }));
   };
-  const resetProposal = () => { setProposalForm(newProposal()); setEditingProposalId(null); };
+  const resetProposal = () => { setProposalForm(newProposal()); setEditingProposalId(null); setProposalImage(null); };
   const saveProposal = async (event) => {
     event.preventDefault(); setSaving(true);
     const payload = {
@@ -246,7 +248,21 @@ export default function AdminPlanes() {
       precio_consulta_adicional: proposalForm.precio_consulta_adicional === "" ? null : Number(proposalForm.precio_consulta_adicional),
     };
     try {
-      await api(editingProposalId ? `/api/propuestas/${editingProposalId}/` : "/api/propuestas/", { method: editingProposalId ? "PATCH" : "POST", body: JSON.stringify(payload) });
+      const url = editingProposalId ? `/api/propuestas/${editingProposalId}/` : "/api/propuestas/";
+      const method = editingProposalId ? "PATCH" : "POST";
+      let body;
+      if (proposalImage) {
+        // Con imagen → multipart (el navegador pone el boundary; api() ya lo detecta).
+        const fd = new FormData();
+        Object.entries(payload).forEach(([k, v]) => {
+          if (v !== null && v !== undefined) fd.append(k, v);
+        });
+        fd.append("imagen", proposalImage);
+        body = fd;
+      } else {
+        body = JSON.stringify(payload);
+      }
+      await api(url, { method, body });
       setToast({ type: "success", message: editingProposalId ? "Propuesta actualizada." : "Propuesta guardada como borrador." });
       resetProposal(); await loadData();
     } catch (error) { setToast({ type: "error", message: error.message }); }
@@ -342,6 +358,11 @@ export default function AdminPlanes() {
               <Field label="Descuento comercial adicional %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={proposalForm.descuento_porcentaje} onChange={(e) => setProposalForm({ ...proposalForm, descuento_porcentaje: e.target.value })} /></Field>
               <Field label="Válida hasta"><input className={inputClass} type="date" value={proposalForm.valida_hasta} onChange={(e) => setProposalForm({ ...proposalForm, valida_hasta: e.target.value })} required /></Field>
               <div className="md:col-span-2 lg:col-span-3"><Field label="Observaciones"><textarea className={`${inputClass} min-h-20 resize-y`} value={proposalForm.observaciones} onChange={(e) => setProposalForm({ ...proposalForm, observaciones: e.target.value })} placeholder="Condiciones especiales, alcance o notas para el cliente" /></Field></div>
+              <div className="md:col-span-2 lg:col-span-3"><Field label="Imagen (opcional — se incluye en el correo)">
+                <input type="file" accept="image/*" onChange={(e) => setProposalImage(e.target.files?.[0] || null)} className={`${inputClass} cursor-pointer file:mr-3 file:rounded-md file:border-0 file:bg-brand/20 file:px-3 file:py-1 file:text-brand`} />
+                {proposalImage && <p className="mt-1 text-xs text-muted">Imagen seleccionada: {proposalImage.name}</p>}
+                {!proposalImage && editingProposalId && <p className="mt-1 text-xs text-muted">Sube una imagen solo si quieres cambiar la actual.</p>}
+              </Field></div>
               <div className="rounded-2xl border border-brand/20 bg-brand/5 p-4"><div className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted">Total propuesto</div><div className="mt-1 text-2xl font-black text-brand">{money(proposalTotal, proposalForm.moneda)}</div>{Number(proposalForm.descuento_volumen_porcentaje) > 0 && <div className="mt-1 text-xs font-semibold text-emerald-600">Incluye {proposalForm.descuento_volumen_porcentaje}% de ahorro por volumen</div>}{proposalForm.precio_consulta_adicional !== "" && <div className="mt-1 text-xs text-muted">Consulta adicional: {money(proposalForm.precio_consulta_adicional, proposalForm.moneda)}</div>}{proposalForm.moneda === 'USD' && trm && <div className="mt-1 text-[10px] text-muted">Convertido con TRM {money(trm.valor, 'COP')} del {new Date(`${trm.fecha}T00:00:00`).toLocaleDateString('es-CO')}</div>}</div>
             </div>
             <div className="mt-4 flex justify-end"><button disabled={saving} className="rounded-xl bg-gradient-to-r from-brand to-brand-2 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand/20 disabled:opacity-60">{saving ? "Guardando…" : editingProposalId ? "Actualizar propuesta" : "Guardar borrador"}</button></div>

@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import Toast from "../components/Toast";
 import CardDni from "../components/CardDni";
 import Terminos from "../components/Terminos";
+import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import ConsultaMasivaModal from "../components/ConsultaMasivaModal";
 import LotesFuentes from "../components/LotesFuentes";
 
@@ -481,6 +482,7 @@ export default function ConsultaEssencialExpress() {
                       </span>
                     </label>
                   </div>
+                <AvisoTratamientoDatos className="mt-1" />
                   <button
                     type="submit"
                     disabled={!tipoDoc || !cedula || !acepta || !consentimiento}

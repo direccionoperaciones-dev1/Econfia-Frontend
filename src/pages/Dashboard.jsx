@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useLocation, Outlet, useNavigate } from "react-router-dom";
 import LogoOrganizacion from "../components/LogoOrganizacion";
 import Taskbar from "../components/TaskBar";
+import NotificacionesBell from "../components/NotificacionesBell";
 import { useTheme } from "../context/ThemeContext";
 import {
   SESSION_INACTIVITY_LIMIT_MS,
@@ -134,6 +135,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent">
+      {!hideLayout && <NotificacionesBell />}
       {!hideLayout && (
         <div className="relative w-full h-[340px]">
           {/* Logo — esquina superior izquierda */}
