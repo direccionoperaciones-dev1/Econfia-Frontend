@@ -109,6 +109,7 @@ export default function VerificarConsulta() {
               <Fila label="NIT" value={data.nit} />
               <Fila label="Documento consultado" value={data.documento_consultado} />
               <Fila label="IP de la consulta" value={data.ip_consulta} />
+              <Fila label="Canal" value={data.canal} />
               <div className="flex items-center justify-between py-3">
                 <span className="text-xs uppercase tracking-wider text-slate-400">
                   Consentimiento afirmado

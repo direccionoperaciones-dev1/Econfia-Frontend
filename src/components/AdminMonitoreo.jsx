@@ -48,6 +48,7 @@ const AdminMonitoreo = () => {
   const auth = { Authorization: `Token ${token}` };
 
   const [dias, setDias] = useState(30);
+  const [mes, setMes] = useState("");   // "YYYY-MM"; si está, manda sobre `dias`
   const [reporte, setReporte] = useState(null);
   const [cargando, setCargando] = useState(false);
   const [sondeando, setSondeando] = useState(false);
@@ -63,11 +64,12 @@ const AdminMonitoreo = () => {
     if (toast) { const t = setTimeout(() => setToast(null), 3500); return () => clearTimeout(t); }
   }, [toast]);
 
-  const cargarReporte = useCallback(async (d = dias) => {
+  const cargarReporte = useCallback(async (d = dias, m = mes) => {
     if (!token) return;
     setCargando(true);
     try {
-      const r = await fetch(`${API_URL}/api/admin/monitor/reporte/?dias=${d}`, { headers: auth });
+      const q = m ? `mes=${m}` : `dias=${d}`;
+      const r = await fetch(`${API_URL}/api/admin/monitor/reporte/?${q}`, { headers: auth });
       if (!r.ok) throw new Error("No autorizado o error del servidor");
       setReporte(await r.json());
     } catch (e) {
@@ -75,7 +77,7 @@ const AdminMonitoreo = () => {
     } finally {
       setCargando(false);
     }
-  }, [dias, token]);   // eslint-disable-line react-hooks/exhaustive-deps
+  }, [dias, mes, token]);   // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { cargarReporte(); }, [cargarReporte]);
   useEffect(() => () => clearInterval(pollRef.current), []);
@@ -109,13 +111,15 @@ const AdminMonitoreo = () => {
 
   const descargarExcel = async () => {
     try {
-      const r = await fetch(`${API_URL}/api/admin/monitor/excel/?dias=${dias}`, { headers: auth });
+      const q = mes ? `mes=${mes}` : `dias=${dias}`;
+      const r = await fetch(`${API_URL}/api/admin/monitor/excel/?${q}`, { headers: auth });
       if (!r.ok) throw new Error("No se pudo generar el Excel");
       const blob = await r.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, "");
-      a.href = url; a.download = `monitoreo_fuentes_${stamp}.xlsx`;
+      a.href = url;
+      a.download = mes ? `monitoreo_fuentes_${mes}.xlsx` : `monitoreo_fuentes_${stamp}.xlsx`;
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       notificar("Excel descargado ✔");
@@ -124,7 +128,9 @@ const AdminMonitoreo = () => {
     }
   };
 
-  const cambiarDias = (d) => { setDias(d); cargarReporte(d); };
+  // Al elegir un preset de días se limpia el mes (y viceversa): manda uno u otro.
+  const cambiarDias = (d) => { setMes(""); setDias(d); cargarReporte(d, ""); };
+  const cambiarMes = (m) => { setMes(m); cargarReporte(dias, m); };
 
   const kpi = reporte?.kpi;
   const pct = progreso.total ? Math.round((progreso.hechos / progreso.total) * 100) : 0;
@@ -193,10 +199,23 @@ const AdminMonitoreo = () => {
               <button key={d} onClick={() => cambiarDias(d)}
                 style={{
                   border: "none", cursor: "pointer", padding: "7px 15px", borderRadius: 9, fontWeight: 700,
-                  background: dias === d ? T.brand : "transparent",
-                  color: dias === d ? T.surface : T.muted,
+                  background: (!mes && dias === d) ? T.brand : "transparent",
+                  color: (!mes && dias === d) ? T.surface : T.muted,
                 }}>{d}d</button>
             ))}
+          </div>
+          {/* Selector de MES calendario (para el reporte mensual ISO 9001) */}
+          <div style={{ display: "flex", alignItems: "center", gap: 6, background: T.surface2, borderRadius: 12, padding: "4px 8px", border: `1px solid ${mes ? T.brand : T.line}` }}>
+            <span title="Reporte de un mes calendario completo" style={{ fontSize: 13, fontWeight: 700, color: T.muted }}>🗓️ Mes</span>
+            <input type="month" value={mes} onChange={(e) => cambiarMes(e.target.value)}
+              style={{
+                border: "none", background: "transparent", color: T.text,
+                fontWeight: 700, fontSize: 13, cursor: "pointer", outline: "none",
+              }} />
+            {mes && (
+              <button onClick={() => cambiarDias(dias)} title="Volver a últimos N días"
+                style={{ border: "none", background: "transparent", color: T.muted, cursor: "pointer", fontWeight: 800, fontSize: 14 }}>✕</button>
+            )}
           </div>
           <button onClick={lanzarSondeo} disabled={sondeando}
             style={{

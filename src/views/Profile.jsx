@@ -13,6 +13,7 @@ import { generarInformeUsuarioPDF } from "../pdf/InformeUsuarioPDFV2";
 import { clearSession } from "../utils/session";
 import { useTheme } from "../context/ThemeContext";
 import VerificacionIdentidadModal from "../components/VerificacionIdentidadModal";
+import WhatsAppVinculoCard from "../components/WhatsAppVinculoCard";
 
 /** Paleta y helpers de estilo elegante */
 const THEME = {
@@ -585,6 +586,9 @@ export default function Profile() {
             </ResponsiveContainer>
           </div>
         </ElegantCard>
+        </div>
+        <div className="mt-4">
+          <WhatsAppVinculoCard />
         </div>
       </div>
       {mostrarVerificacionIdentidad && (

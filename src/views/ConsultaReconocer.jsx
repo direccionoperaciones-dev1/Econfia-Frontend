@@ -219,7 +219,7 @@ export default function ConsultaReconocer() {
                     </label>
                     <label className="group flex cursor-pointer items-center gap-2">
                       <input type="checkbox" checked={consentimiento} onChange={(e) => setConsentimiento(e.target.checked)} className="h-4 w-4 cursor-pointer accent-brand" />
-                      <span className="text-xs text-content/85">Confirmo consentimiento del titular</span>
+                      <span className="text-xs text-content/85">Declaro bajo mi responsabilidad que cuento con la autorización previa del titular de los datos personales objeto de consulta o con un fundamento legal válido que me habilita para realizarla, y que utilizaré la información exclusivamente para finalidades legítimas y autorizadas</span>
                     </label>
                   </div>
                 <AvisoTratamientoDatos className="mt-1" />

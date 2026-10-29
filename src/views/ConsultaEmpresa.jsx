@@ -917,7 +917,7 @@ export default function ConsultaEmpresa() {
                         onChange={(e) => setConsentimiento(e.target.checked)}
                         className="mt-1 accent-sky-500"
                       />
-                      <span>Confirmo autorización para consultar esta información.</span>
+                      <span>Declaro bajo mi responsabilidad que cuento con la autorización previa del titular de los datos personales objeto de consulta o con un fundamento legal válido que me habilita para realizarla, y que utilizaré la información exclusivamente para finalidades legítimas y autorizadas para consultar esta información.</span>
                     </label>
                   </div>
                 </div>

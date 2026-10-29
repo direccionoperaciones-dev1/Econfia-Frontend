@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Modal from "./Modal";
 import Toast from "./Toast";
+import AjusteIPCPanel from "./AjusteIPCPanel";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
 
@@ -25,21 +26,30 @@ const ESTADOS = [
 ];
 const emptyPlan = {
   nombre: "essential", descripcion: "", costo: "0", precio: "0", moneda: "COP",
-  periodicidad: "mensual", consultas_incluidas: "", activo: true,
+  periodicidad: "mensual", consultas_incluidas: "", activo: true, ajuste_ipc: true,
 };
 const defaultExpiry = () => {
   const date = new Date();
   date.setDate(date.getDate() + 15);
   return date.toISOString().slice(0, 10);
 };
-const newProposal = () => ({
-  plan: "", cliente_nombre: "", cliente_empresa: "", cliente_email: "",
-  moneda: "COP",
-  tarifa_origen: "", cantidad: "1", precio_unitario: "", precio_paquete: "",
-  descuento_volumen_porcentaje: "0", precio_consulta_adicional: "",
-  descuento_porcentaje: "0",
-  valida_hasta: defaultExpiry(), observaciones: "",
+const newItem = () => ({
+  plan: "", tarifa_origen: "", cantidad: "1", precio_unitario: "", precio_paquete: "",
+  descuento_volumen_porcentaje: "0", precio_consulta_adicional: "", descuento_porcentaje: "0",
+  usuarios: "", disponibilidad: "", beneficios: "", plan_descripcion: "",
 });
+const newProposal = () => ({
+  cliente_nombre: "", cliente_empresa: "", cliente_email: "",
+  moneda: "COP", descuento_porcentaje: "0",
+  valida_hasta: defaultExpiry(), observaciones: "",
+  items: [newItem()],
+});
+const itemSubtotal = (item) => item.precio_paquete === "" ? Number(item.precio_unitario || 0) * Number(item.cantidad || 0) : Number(item.precio_paquete || 0);
+const itemTotal = (item) => itemSubtotal(item) * (1 - Number(item.descuento_porcentaje || 0) / 100);
+const ACCEPT_ADJUNTOS = "image/jpeg,image/png,image/webp,image/gif,application/pdf,video/mp4,video/webm,video/quicktime";
+const fileSize = (bytes) => bytes >= 1048576 ? `${(bytes / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+const fileIcon = (tipo) => tipo === "video" ? "🎬" : tipo === "pdf" ? "📄" : "🖼️";
+const fileType = (file) => file.type.startsWith("video/") ? "video" : file.type === "application/pdf" ? "pdf" : "imagen";
 const emptyRate = () => ({
   cantidad: "", precio_unitario: "", precio_paquete: "",
   descuento_porcentaje: "0", precio_consulta_adicional: "", activo: true,
@@ -81,7 +91,8 @@ export default function AdminPlanes() {
   const [proposalForm, setProposalForm] = useState(newProposal());
   const [editId, setEditId] = useState(null);
   const [editingProposalId, setEditingProposalId] = useState(null);
-  const [proposalImage, setProposalImage] = useState(null); // File | null (imagen opcional)
+  const [proposalFiles, setProposalFiles] = useState([]); // adjuntos nuevos (imagen / PDF / video)
+  const [existingFiles, setExistingFiles] = useState([]); // adjuntos ya guardados (al editar)
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState(null);
@@ -142,6 +153,7 @@ export default function AdminPlanes() {
       nombre: plan.nombre, descripcion: plan.descripcion || "", costo: String(plan.costo || 0),
       precio: String(plan.precio || 0), moneda: plan.moneda || "COP",
       periodicidad: plan.periodicidad || "mensual", consultas_incluidas: plan.consultas_incluidas ?? "", activo: plan.activo,
+      ajuste_ipc: plan.ajuste_ipc ?? true,
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -207,62 +219,94 @@ export default function AdminPlanes() {
     finally { setSavingRates(false); }
   };
 
-  const chooseProposalPlan = (planId) => {
-    const plan = planes.find((item) => String(item.id) === String(planId));
-    setProposalForm((current) => ({
-      ...current, plan: planId, tarifa_origen: "", cantidad: "1",
-      moneda: plan?.moneda || "COP",
-      precio_unitario: plan ? String(plan.precio || 0) : "", precio_paquete: "",
-      descuento_volumen_porcentaje: "0", precio_consulta_adicional: "",
-    }));
+  const updateItem = (index, changes) => setProposalForm((current) => ({
+    ...current, items: current.items.map((item, i) => i === index ? { ...item, ...changes } : item),
+  }));
+  const chooseItemPlan = (index, planId) => {
+    const plan = planes.find((p) => String(p.id) === String(planId));
+    updateItem(index, {
+      plan: planId, tarifa_origen: "", cantidad: "1",
+      precio_unitario: plan ? String(Math.round(convertCurrency(plan.precio || 0, plan.moneda, proposalForm.moneda, trm))) : "",
+      precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "",
+      plan_descripcion: plan?.descripcion || "",
+    });
   };
-  const chooseProposalRate = (rateId) => {
-    const rate = (proposalPlan?.tarifas || []).find((item) => String(item.id) === String(rateId));
-    setProposalForm((current) => rate ? ({
-      ...current, tarifa_origen: rateId, cantidad: String(rate.cantidad),
-      precio_unitario: String(convertCurrency(rate.precio_unitario, proposalPlan.moneda, current.moneda, trm)),
-      precio_paquete: String(convertCurrency(rate.precio_paquete, proposalPlan.moneda, current.moneda, trm)),
+  const chooseItemRate = (index, rateId) => {
+    const item = proposalForm.items[index];
+    const plan = planes.find((p) => String(p.id) === String(item.plan));
+    const rate = (plan?.tarifas || []).find((r) => String(r.id) === String(rateId));
+    const conv = (v) => String(convertCurrency(v, plan?.moneda, proposalForm.moneda, trm));
+    updateItem(index, rate ? {
+      tarifa_origen: rateId, cantidad: String(rate.cantidad),
+      precio_unitario: conv(rate.precio_unitario), precio_paquete: conv(rate.precio_paquete),
       descuento_volumen_porcentaje: String(rate.descuento_porcentaje || 0),
-      precio_consulta_adicional: rate.precio_consulta_adicional == null ? "" : String(convertCurrency(rate.precio_consulta_adicional, proposalPlan.moneda, current.moneda, trm)),
-    }) : ({ ...current, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" }));
+      precio_consulta_adicional: rate.precio_consulta_adicional == null ? "" : conv(rate.precio_consulta_adicional),
+    } : { tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" });
   };
+  const addItem = () => setProposalForm((current) => ({ ...current, items: [...current.items, newItem()] }));
+  const removeItem = (index) => setProposalForm((current) => ({ ...current, items: current.items.filter((_, i) => i !== index) }));
   const changeProposalCurrency = (currency) => {
     const source = proposalForm.moneda;
+    const conv = (v) => v === "" ? "" : String(convertCurrency(v, source, currency, trm));
     setProposalForm((current) => ({
-      ...current,
-      moneda: currency,
-      precio_unitario: String(convertCurrency(current.precio_unitario, source, currency, trm)),
-      precio_paquete: current.precio_paquete === "" ? "" : String(convertCurrency(current.precio_paquete, source, currency, trm)),
-      precio_consulta_adicional: current.precio_consulta_adicional === "" ? "" : String(convertCurrency(current.precio_consulta_adicional, source, currency, trm)),
+      ...current, moneda: currency,
+      items: current.items.map((item) => ({
+        ...item, precio_unitario: conv(item.precio_unitario), precio_paquete: conv(item.precio_paquete),
+        precio_consulta_adicional: conv(item.precio_consulta_adicional),
+      })),
     }));
   };
-  const resetProposal = () => { setProposalForm(newProposal()); setEditingProposalId(null); setProposalImage(null); };
+  const resetProposal = () => { setProposalForm(newProposal()); setEditingProposalId(null); setProposalFiles([]); setExistingFiles([]); };
+  const addFiles = (fileList) => {
+    const files = Array.from(fileList || []);
+    if (existingFiles.length + proposalFiles.length + files.length > 15) {
+      setToast({ type: "error", message: "Máximo 15 archivos por propuesta." }); return;
+    }
+    setProposalFiles((current) => [...current, ...files]);
+  };
+  const deleteExistingFile = async (file) => {
+    if (!window.confirm(`¿Quitar «${file.titulo || file.nombre}» de la propuesta?`)) return;
+    try {
+      await api(`/api/propuestas/${editingProposalId}/adjuntos/${file.id}/`, { method: "DELETE" });
+      setExistingFiles((current) => current.filter((f) => f.id !== file.id));
+      await loadData();
+    } catch (error) { setToast({ type: "error", message: error.message }); }
+  };
   const saveProposal = async (event) => {
-    event.preventDefault(); setSaving(true);
+    event.preventDefault();
+    if (proposalForm.items.some((item) => !item.plan)) { setToast({ type: "error", message: "Selecciona el plan de cada línea." }); return; }
+    setSaving(true);
+    const numberOrNull = (v) => v === "" || v == null ? null : Number(v);
     const payload = {
-      ...proposalForm, plan: Number(proposalForm.plan), cantidad: Number(proposalForm.cantidad),
-      precio_unitario: Number(proposalForm.precio_unitario), descuento_porcentaje: Number(proposalForm.descuento_porcentaje || 0),
-      tarifa_origen: proposalForm.tarifa_origen ? Number(proposalForm.tarifa_origen) : null,
-      precio_paquete: proposalForm.precio_paquete === "" ? null : Number(proposalForm.precio_paquete),
-      descuento_volumen_porcentaje: Number(proposalForm.descuento_volumen_porcentaje || 0),
-      precio_consulta_adicional: proposalForm.precio_consulta_adicional === "" ? null : Number(proposalForm.precio_consulta_adicional),
+      cliente_nombre: proposalForm.cliente_nombre, cliente_empresa: proposalForm.cliente_empresa,
+      cliente_email: proposalForm.cliente_email, moneda: proposalForm.moneda,
+      descuento_porcentaje: Number(proposalForm.descuento_porcentaje || 0),
+      valida_hasta: proposalForm.valida_hasta, observaciones: proposalForm.observaciones,
+      items: proposalForm.items.map((item) => ({
+        plan: Number(item.plan), tarifa_origen: item.tarifa_origen ? Number(item.tarifa_origen) : null,
+        cantidad: Number(item.cantidad || 1), precio_unitario: Number(item.precio_unitario || 0),
+        precio_paquete: numberOrNull(item.precio_paquete),
+        descuento_volumen_porcentaje: Number(item.descuento_volumen_porcentaje || 0),
+        precio_consulta_adicional: numberOrNull(item.precio_consulta_adicional),
+        descuento_porcentaje: Number(item.descuento_porcentaje || 0),
+        usuarios: numberOrNull(item.usuarios), disponibilidad: item.disponibilidad,
+        beneficios: item.beneficios, plan_descripcion: item.plan_descripcion,
+      })),
     };
     try {
       const url = editingProposalId ? `/api/propuestas/${editingProposalId}/` : "/api/propuestas/";
-      const method = editingProposalId ? "PATCH" : "POST";
-      let body;
-      if (proposalImage) {
-        // Con imagen → multipart (el navegador pone el boundary; api() ya lo detecta).
+      const saved = await api(url, { method: editingProposalId ? "PATCH" : "POST", body: JSON.stringify(payload) });
+      if (proposalFiles.length) {
         const fd = new FormData();
-        Object.entries(payload).forEach(([k, v]) => {
-          if (v !== null && v !== undefined) fd.append(k, v);
-        });
-        fd.append("imagen", proposalImage);
-        body = fd;
-      } else {
-        body = JSON.stringify(payload);
+        proposalFiles.forEach((file) => fd.append("archivos", file));
+        try { await api(`/api/propuestas/${saved.id}/adjuntos/`, { method: "POST", body: fd }); }
+        catch (error) {
+          // La propuesta queda guardada: se pasa a modo edición para reintentar solo los archivos.
+          setToast({ type: "error", message: `La propuesta se guardó, pero los archivos no: ${error.message}` });
+          setEditingProposalId(saved.id); setExistingFiles(saved.adjuntos || []);
+          await loadData(); return;
+        }
       }
-      await api(url, { method, body });
       setToast({ type: "success", message: editingProposalId ? "Propuesta actualizada." : "Propuesta guardada como borrador." });
       resetProposal(); await loadData();
     } catch (error) { setToast({ type: "error", message: error.message }); }
@@ -270,16 +314,22 @@ export default function AdminPlanes() {
   };
   const editProposal = (proposal) => {
     setEditingProposalId(proposal.id);
+    const str = (v) => v == null ? "" : String(v);
+    const items = (proposal.items || []).map((item) => ({
+      plan: str(item.plan), tarifa_origen: str(item.tarifa_origen), cantidad: str(item.cantidad),
+      precio_unitario: str(item.precio_unitario), precio_paquete: str(item.precio_paquete),
+      descuento_volumen_porcentaje: str(item.descuento_volumen_porcentaje || 0),
+      precio_consulta_adicional: str(item.precio_consulta_adicional),
+      descuento_porcentaje: str(item.descuento_porcentaje || 0), usuarios: str(item.usuarios),
+      disponibilidad: item.disponibilidad || "", beneficios: item.beneficios || "", plan_descripcion: item.plan_descripcion || "",
+    }));
     setProposalForm({
-      plan: String(proposal.plan), cliente_nombre: proposal.cliente_nombre, cliente_empresa: proposal.cliente_empresa || "",
-      moneda: proposal.moneda || "COP",
-      cliente_email: proposal.cliente_email, cantidad: String(proposal.cantidad), precio_unitario: String(proposal.precio_unitario),
-      tarifa_origen: proposal.tarifa_origen == null ? "" : String(proposal.tarifa_origen),
-      precio_paquete: proposal.precio_paquete == null ? "" : String(proposal.precio_paquete),
-      descuento_volumen_porcentaje: String(proposal.descuento_volumen_porcentaje || 0),
-      precio_consulta_adicional: proposal.precio_consulta_adicional == null ? "" : String(proposal.precio_consulta_adicional),
-      descuento_porcentaje: String(proposal.descuento_porcentaje), valida_hasta: proposal.valida_hasta, observaciones: proposal.observaciones || "",
+      cliente_nombre: proposal.cliente_nombre, cliente_empresa: proposal.cliente_empresa || "",
+      cliente_email: proposal.cliente_email, moneda: proposal.moneda || "COP",
+      descuento_porcentaje: String(proposal.descuento_porcentaje), valida_hasta: proposal.valida_hasta,
+      observaciones: proposal.observaciones || "", items: items.length ? items : [newItem()],
     });
+    setProposalFiles([]); setExistingFiles(proposal.adjuntos || []);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const sendProposal = async (proposal) => {
@@ -300,8 +350,7 @@ export default function AdminPlanes() {
   };
 
   const activePlans = planes.filter((plan) => plan.activo);
-  const proposalPlan = planes.find((plan) => String(plan.id) === String(proposalForm.plan));
-  const proposalSubtotal = proposalForm.precio_paquete === "" ? Number(proposalForm.precio_unitario || 0) * Number(proposalForm.cantidad || 0) : Number(proposalForm.precio_paquete || 0);
+  const proposalSubtotal = proposalForm.items.reduce((sum, item) => sum + itemTotal(item), 0);
   const proposalTotal = proposalSubtotal * (1 - Number(proposalForm.descuento_porcentaje || 0) / 100);
 
   return (
@@ -339,31 +388,58 @@ export default function AdminPlanes() {
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
               <label className="flex items-center gap-2 text-sm font-semibold text-content"><input type="checkbox" className="h-4 w-4 accent-brand" checked={planForm.activo} onChange={(e) => setPlanForm({ ...planForm, activo: e.target.checked })} />Disponible para propuestas</label>
+              <label className="flex items-center gap-2 text-sm font-semibold text-content" title="El precio comercial y las tarifas suben automáticamente con el ajuste IPC anual"><input type="checkbox" className="h-4 w-4 accent-brand" checked={planForm.ajuste_ipc} onChange={(e) => setPlanForm({ ...planForm, ajuste_ipc: e.target.checked })} />Sube con el IPC anual</label>
               <button disabled={saving} className="rounded-xl bg-gradient-to-r from-brand to-brand-2 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand/20 disabled:opacity-60">{saving ? "Guardando…" : editId ? "Actualizar plan" : "Crear plan"}</button>
             </div>
           </form>
+          <AjusteIPCPanel api={api} planes={planes} onApplied={loadData} notify={setToast} />
           <PlansTable loading={loading} planes={planes} displayCurrency={displayCurrency} trm={trm} onEdit={editPlan} onRates={openRates} onAssign={openAssign} onDelete={deletePlan} />
         </> : <>
           <form onSubmit={saveProposal} className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg md:p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black text-content">{editingProposalId ? `Editar propuesta #${editingProposalId}` : "Nueva propuesta"}</h3>{editingProposalId && <button type="button" onClick={resetProposal} className="text-sm font-bold text-muted hover:text-content">Cancelar edición</button>}</div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Field label="Plan"><select className={inputClass} value={proposalForm.plan} onChange={(e) => chooseProposalPlan(e.target.value)} required><option value="">Selecciona un plan</option>{activePlans.map((plan) => <option key={plan.id} value={plan.id}>{plan.nombre_display || plan.nombre}</option>)}</select></Field>
-              <Field label="Tarifa por volumen"><select className={inputClass} value={proposalForm.tarifa_origen} onChange={(e) => chooseProposalRate(e.target.value)} disabled={!proposalPlan}><option value="">Precio personalizado</option>{(proposalPlan?.tarifas || []).filter((rate) => rate.activo).map((rate) => <option key={rate.id} value={rate.id}>{rate.cantidad.toLocaleString("es-CO")} consultas · {money(convertCurrency(rate.precio_paquete, proposalPlan.moneda, proposalForm.moneda, trm), proposalForm.moneda)}</option>)}</select></Field>
-              <Field label="Moneda de la propuesta"><select className={inputClass} value={proposalForm.moneda} onChange={(e) => changeProposalCurrency(e.target.value)}><option value="COP">COP — Peso colombiano</option><option value="USD" disabled={!trm}>USD — Dólar con TRM</option></select></Field>
               <Field label="Nombre del cliente"><input className={inputClass} value={proposalForm.cliente_nombre} onChange={(e) => setProposalForm({ ...proposalForm, cliente_nombre: e.target.value })} required /></Field>
               <Field label="Empresa"><input className={inputClass} value={proposalForm.cliente_empresa} onChange={(e) => setProposalForm({ ...proposalForm, cliente_empresa: e.target.value })} /></Field>
               <Field label="Correo"><input className={inputClass} type="email" value={proposalForm.cliente_email} onChange={(e) => setProposalForm({ ...proposalForm, cliente_email: e.target.value })} required /></Field>
-              <Field label="Cantidad"><input className={inputClass} type="number" min="1" value={proposalForm.cantidad} onChange={(e) => setProposalForm({ ...proposalForm, cantidad: e.target.value, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" })} required /></Field>
-              <Field label="Precio unitario"><MoneyInput value={proposalForm.precio_unitario} currency={proposalForm.moneda} onChange={(value) => setProposalForm({ ...proposalForm, precio_unitario: value, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" })} required /></Field>
+              <Field label="Moneda de la propuesta"><select className={inputClass} value={proposalForm.moneda} onChange={(e) => changeProposalCurrency(e.target.value)}><option value="COP">COP — Peso colombiano</option><option value="USD" disabled={!trm}>USD — Dólar con TRM</option></select></Field>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
+              <div><div className="text-sm font-black text-content">Planes de la propuesta</div><div className="text-xs text-muted">Agrega uno o varios planes, cada uno con sus condiciones.</div></div>
+              <button type="button" onClick={addItem} disabled={proposalForm.items.length >= 20} className="rounded-xl border border-brand/25 bg-brand/10 px-4 py-2 text-sm font-black text-brand transition hover:bg-brand/15 disabled:opacity-50">+ Agregar plan</button>
+            </div>
+            <div className="mt-3 space-y-3">
+              {proposalForm.items.map((item, index) => <ProposalItemCard key={index} index={index} item={item} canRemove={proposalForm.items.length > 1} plans={activePlans} allPlans={planes} currency={proposalForm.moneda} trm={trm} onChange={(changes) => updateItem(index, changes)} onPlan={(planId) => chooseItemPlan(index, planId)} onRate={(rateId) => chooseItemRate(index, rateId)} onRemove={() => removeItem(index)} />)}
+            </div>
+
+            <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <Field label="Descuento comercial adicional %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={proposalForm.descuento_porcentaje} onChange={(e) => setProposalForm({ ...proposalForm, descuento_porcentaje: e.target.value })} /></Field>
               <Field label="Válida hasta"><input className={inputClass} type="date" value={proposalForm.valida_hasta} onChange={(e) => setProposalForm({ ...proposalForm, valida_hasta: e.target.value })} required /></Field>
-              <div className="md:col-span-2 lg:col-span-3"><Field label="Observaciones"><textarea className={`${inputClass} min-h-20 resize-y`} value={proposalForm.observaciones} onChange={(e) => setProposalForm({ ...proposalForm, observaciones: e.target.value })} placeholder="Condiciones especiales, alcance o notas para el cliente" /></Field></div>
-              <div className="md:col-span-2 lg:col-span-3"><Field label="Imagen (opcional — se incluye en el correo)">
-                <input type="file" accept="image/*" onChange={(e) => setProposalImage(e.target.files?.[0] || null)} className={`${inputClass} cursor-pointer file:mr-3 file:rounded-md file:border-0 file:bg-brand/20 file:px-3 file:py-1 file:text-brand`} />
-                {proposalImage && <p className="mt-1 text-xs text-muted">Imagen seleccionada: {proposalImage.name}</p>}
-                {!proposalImage && editingProposalId && <p className="mt-1 text-xs text-muted">Sube una imagen solo si quieres cambiar la actual.</p>}
-              </Field></div>
-              <div className="rounded-2xl border border-brand/20 bg-brand/5 p-4"><div className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted">Total propuesto</div><div className="mt-1 text-2xl font-black text-brand">{money(proposalTotal, proposalForm.moneda)}</div>{Number(proposalForm.descuento_volumen_porcentaje) > 0 && <div className="mt-1 text-xs font-semibold text-emerald-600">Incluye {proposalForm.descuento_volumen_porcentaje}% de ahorro por volumen</div>}{proposalForm.precio_consulta_adicional !== "" && <div className="mt-1 text-xs text-muted">Consulta adicional: {money(proposalForm.precio_consulta_adicional, proposalForm.moneda)}</div>}{proposalForm.moneda === 'USD' && trm && <div className="mt-1 text-[10px] text-muted">Convertido con TRM {money(trm.valor, 'COP')} del {new Date(`${trm.fecha}T00:00:00`).toLocaleDateString('es-CO')}</div>}</div>
+              <div className="md:col-span-2"><Field label="Observaciones"><textarea className={`${inputClass} min-h-20 resize-y`} value={proposalForm.observaciones} onChange={(e) => setProposalForm({ ...proposalForm, observaciones: e.target.value })} placeholder="Condiciones especiales, alcance o notas para el cliente" /></Field></div>
+              <div className="md:col-span-2 lg:col-span-3">
+                <span className={labelClass}>Imágenes, PDF y videos (se ven en la presentación del cliente)</span>
+                <label onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }} className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-brand/25 bg-brand/[0.03] px-4 py-5 text-center transition hover:border-brand/50 hover:bg-brand/[0.06]">
+                  <span className="text-2xl">📎</span>
+                  <span className="mt-1 text-sm font-bold text-content">Arrastra archivos o haz clic para elegir</span>
+                  <span className="text-xs text-muted">Imagen hasta 10 MB · PDF hasta 25 MB · Video MP4/WEBM/MOV hasta 90 MB · máx. 15</span>
+                  <input type="file" multiple accept={ACCEPT_ADJUNTOS} className="hidden" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
+                </label>
+                {(existingFiles.length > 0 || proposalFiles.length > 0) && <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {existingFiles.map((file) => <div key={`e-${file.id}`} className="flex items-center gap-3 rounded-xl border border-line/15 bg-surface-2/60 px-3 py-2 text-sm">
+                    <span className="text-lg">{fileIcon(file.tipo)}</span>
+                    <a href={file.url} target="_blank" rel="noopener noreferrer" className="min-w-0 flex-1 truncate font-semibold text-content hover:text-brand">{file.titulo || file.nombre}</a>
+                    <span className="text-[10px] text-muted">{fileSize(file.tamano)}</span>
+                    <button type="button" onClick={() => deleteExistingFile(file)} className="text-lg font-bold text-red-500" aria-label="Quitar archivo">×</button>
+                  </div>)}
+                  {proposalFiles.map((file, i) => <div key={`n-${i}`} className="flex items-center gap-3 rounded-xl border border-emerald-400/25 bg-emerald-500/5 px-3 py-2 text-sm">
+                    <span className="text-lg">{fileIcon(fileType(file))}</span>
+                    <span className="min-w-0 flex-1 truncate font-semibold text-content">{file.name}</span>
+                    <span className="text-[10px] text-muted">{fileSize(file.size)} · nuevo</span>
+                    <button type="button" onClick={() => setProposalFiles((current) => current.filter((_, j) => j !== i))} className="text-lg font-bold text-red-500" aria-label="Quitar archivo">×</button>
+                  </div>)}
+                </div>}
+              </div>
+              <div className="rounded-2xl border border-brand/20 bg-brand/5 p-4"><div className="text-[10px] font-bold uppercase tracking-[0.15em] text-muted">Total propuesto</div><div className="mt-1 text-2xl font-black text-brand">{money(proposalTotal, proposalForm.moneda)}</div><div className="mt-1 text-xs text-muted">{proposalForm.items.length} plan(es){Number(proposalForm.descuento_porcentaje) > 0 ? ` · −${proposalForm.descuento_porcentaje}% adicional` : ""}</div>{proposalForm.moneda === 'USD' && trm && <div className="mt-1 text-[10px] text-muted">Convertido con TRM {money(trm.valor, 'COP')} del {new Date(`${trm.fecha}T00:00:00`).toLocaleDateString('es-CO')}</div>}</div>
             </div>
             <div className="mt-4 flex justify-end"><button disabled={saving} className="rounded-xl bg-gradient-to-r from-brand to-brand-2 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand/20 disabled:opacity-60">{saving ? "Guardando…" : editingProposalId ? "Actualizar propuesta" : "Guardar borrador"}</button></div>
           </form>
@@ -465,15 +541,38 @@ function PlansTable({ loading, planes, displayCurrency, trm, onEdit, onRates, on
   </table></div></div>;
 }
 
+function ProposalItemCard({ index, item, canRemove, plans, allPlans, currency, trm, onChange, onPlan, onRate, onRemove }) {
+  const plan = allPlans.find((p) => String(p.id) === String(item.plan));
+  const resetRate = { tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" };
+  return <div className="rounded-2xl border border-line/15 bg-surface-2/40 p-4">
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-brand text-xs font-black text-white">{index + 1}</span><span className="text-sm font-black text-content">{plan ? (plan.nombre_display || plan.nombre) : "Nuevo plan"}</span></div>
+      <div className="flex items-center gap-3"><span className="text-sm font-black text-brand">{money(itemTotal(item), currency)}</span>{canRemove && <button type="button" onClick={onRemove} className="rounded-lg border border-red-400/25 bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-600">Quitar</button>}</div>
+    </div>
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      <Field label="Plan"><select className={inputClass} value={item.plan} onChange={(e) => onPlan(e.target.value)} required><option value="">Selecciona un plan</option>{plans.map((p) => <option key={p.id} value={p.id}>{p.nombre_display || p.nombre}</option>)}</select></Field>
+      <Field label="Tarifa por volumen"><select className={inputClass} value={item.tarifa_origen} onChange={(e) => onRate(e.target.value)} disabled={!plan}><option value="">Precio personalizado</option>{(plan?.tarifas || []).filter((r) => r.activo).map((r) => <option key={r.id} value={r.id}>{r.cantidad.toLocaleString("es-CO")} consultas · {money(convertCurrency(r.precio_paquete, plan.moneda, currency, trm), currency)}</option>)}</select></Field>
+      <Field label="Cantidad de consultas"><input className={inputClass} type="number" min="1" value={item.cantidad} onChange={(e) => onChange({ cantidad: e.target.value, ...resetRate })} required /></Field>
+      <Field label="Precio por consulta"><MoneyInput value={item.precio_unitario} currency={currency} onChange={(value) => onChange({ precio_unitario: value, ...resetRate })} required /></Field>
+      <Field label="Descuento del plan %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={item.descuento_porcentaje} onChange={(e) => onChange({ descuento_porcentaje: e.target.value })} /></Field>
+      <Field label="Usuarios incluidos"><input className={inputClass} type="number" min="1" placeholder="Sin límite definido" value={item.usuarios} onChange={(e) => onChange({ usuarios: e.target.value })} /></Field>
+      <div className="md:col-span-2"><Field label="Disponibilidad"><input className={inputClass} maxLength={160} placeholder="Ej. 24/7 · Lun–Vie 7:00–19:00 · Soporte en 2 h" value={item.disponibilidad} onChange={(e) => onChange({ disponibilidad: e.target.value })} /></Field></div>
+      <div className="md:col-span-2"><Field label="Descripción para el cliente"><textarea className={`${inputClass} min-h-16 resize-y`} value={item.plan_descripcion} onChange={(e) => onChange({ plan_descripcion: e.target.value })} placeholder="Alcance del plan" /></Field></div>
+      <div className="md:col-span-2"><Field label="Beneficios (uno por línea)"><textarea className={`${inputClass} min-h-16 resize-y`} value={item.beneficios} onChange={(e) => onChange({ beneficios: e.target.value })} placeholder={"Resultados en menos de 2 minutos\nInforme PDF descargable\nSoporte prioritario"} /></Field></div>
+    </div>
+    {(Number(item.descuento_volumen_porcentaje) > 0 || item.precio_consulta_adicional !== "") && <div className="mt-2 text-xs text-muted">{Number(item.descuento_volumen_porcentaje) > 0 && <span className="font-semibold text-emerald-600">Incluye {item.descuento_volumen_porcentaje}% de ahorro por volumen. </span>}{item.precio_consulta_adicional !== "" && <span>Consulta adicional: {money(item.precio_consulta_adicional, currency)}</span>}</div>}
+  </div>;
+}
+
 function ProposalsTable({ loading, propuestas, sendingId, onSend, onEdit, onDelete, onStatus }) {
   return <div className="overflow-hidden rounded-[24px] border border-line/15 bg-surface/90 shadow-lg"><div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-left text-sm text-content">
     <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Propuesta</th><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Plan</th><th className="px-3 py-3">Total</th><th className="px-3 py-3">Vigencia</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
     <tbody>{loading ? <tr><td colSpan="7" className="px-5 py-12 text-center text-muted">Cargando propuestas…</td></tr> : propuestas.length === 0 ? <tr><td colSpan="7" className="px-5 py-12 text-center text-muted">Aún no hay propuestas comerciales.</td></tr> : propuestas.map((proposal) => <tr key={proposal.id} className="border-t border-line/10 hover:bg-brand/[0.04]">
       <td className="px-5 py-4"><div className="font-black">#{proposal.id}</div><div className="text-xs text-muted">{new Date(proposal.creada).toLocaleDateString("es-CO")}</div></td>
       <td className="px-3 py-4"><div className="font-bold">{proposal.cliente_nombre}</div><div className="text-xs text-muted">{proposal.cliente_email}</div>{proposal.cliente_empresa && <div className="text-xs text-muted">{proposal.cliente_empresa}</div>}</td>
-      <td className="px-3 py-4"><div className="font-semibold">{proposal.plan_nombre}</div><div className="text-xs text-muted">{proposal.cantidad} unidad(es)</div></td><td className="px-3 py-4 font-black text-brand">{money(proposal.total, proposal.moneda)}</td><td className="px-3 py-4">{new Date(`${proposal.valida_hasta}T00:00:00`).toLocaleDateString("es-CO")}</td>
-      <td className="px-3 py-4"><select className="rounded-lg border border-line/20 bg-surface px-2 py-1.5 text-xs font-bold text-content" value={proposal.estado} onChange={(e) => onStatus(proposal, e.target.value)}>{ESTADOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{proposal.fecha_envio && <div className="mt-1 text-[10px] text-muted">Enviada {new Date(proposal.fecha_envio).toLocaleString("es-CO")}</div>}</td>
-      <td className="px-5 py-4"><div className="flex justify-end gap-2"><button onClick={() => onSend(proposal)} disabled={sendingId === proposal.id} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white disabled:opacity-60">{sendingId === proposal.id ? "Enviando…" : proposal.estado === "enviada" ? "Reenviar" : "Enviar"}</button><Action onClick={() => onEdit(proposal)} tone="brand">Editar</Action><Action onClick={() => onDelete(proposal)} tone="red">Eliminar</Action></div></td>
+      <td className="px-3 py-4">{(proposal.items || []).length ? proposal.items.map((item) => <div key={item.id} className="text-xs"><span className="font-semibold text-content">{item.plan_nombre}</span> <span className="text-muted">× {Number(item.cantidad).toLocaleString("es-CO")}</span></div>) : <div className="font-semibold">{proposal.plan_nombre}</div>}{(proposal.adjuntos || []).length > 0 && <div className="mt-1 text-[10px] text-muted">📎 {proposal.adjuntos.length} archivo(s)</div>}</td><td className="px-3 py-4 font-black text-brand">{money(proposal.total, proposal.moneda)}</td><td className="px-3 py-4">{new Date(`${proposal.valida_hasta}T00:00:00`).toLocaleDateString("es-CO")}</td>
+      <td className="px-3 py-4"><select className="rounded-lg border border-line/20 bg-surface px-2 py-1.5 text-xs font-bold text-content" value={proposal.estado} onChange={(e) => onStatus(proposal, e.target.value)}>{ESTADOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{proposal.fecha_envio && <div className="mt-1 text-[10px] text-muted">Enviada {new Date(proposal.fecha_envio).toLocaleString("es-CO")}</div>}<div className={`mt-1 text-[10px] font-semibold ${proposal.vistas ? "text-emerald-600" : "text-muted"}`} title={proposal.vista_ultima ? `Última vez: ${new Date(proposal.vista_ultima).toLocaleString("es-CO")}` : ""}>👁 {proposal.vistas ? `Abierta ${proposal.vistas} ${proposal.vistas === 1 ? "vez" : "veces"}` : "Sin abrir"}</div></td>
+      <td className="px-5 py-4"><div className="flex justify-end gap-2"><button onClick={() => onSend(proposal)} disabled={sendingId === proposal.id} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white disabled:opacity-60">{sendingId === proposal.id ? "Enviando…" : proposal.estado === "enviada" ? "Reenviar" : "Enviar"}</button>{proposal.enlace_publico && <a href={`${proposal.enlace_publico}?preview=1`} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-1.5 font-semibold text-violet-600">Ver</a>}<Action onClick={() => onEdit(proposal)} tone="brand">Editar</Action><Action onClick={() => onDelete(proposal)} tone="red">Eliminar</Action></div></td>
     </tr>)}</tbody>
   </table></div></div>;
 }
