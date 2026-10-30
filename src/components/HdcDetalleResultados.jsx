@@ -23,6 +23,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import AnalisisFinancieroIA from "./AnalisisFinancieroIA";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -797,6 +798,8 @@ export default function HdcDetalleResultados({ data, consulta, consultaId }) {
 
       <DebtCompositionDonut data={debtCompositionData} />
       <DebtTrendChart data={debtTrendData} />
+
+      <AnalisisFinancieroIA producto="credit_report" consultaId={consultaId || consultaObj?.id} />
 
       {/* Identificación */}
       <Section icon={UserRound} title="Identificación">

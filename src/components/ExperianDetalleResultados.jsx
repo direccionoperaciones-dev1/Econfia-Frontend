@@ -23,6 +23,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import AnalisisFinancieroIA from "./AnalisisFinancieroIA";
 
 function humanizeKey(key) {
   return String(key || "")
@@ -1363,6 +1364,8 @@ export default function ExperianDetalleResultados({ consultaId }) {
               </div>
             </div>
           </section>
+
+          <AnalisisFinancieroIA producto="adjudicator" consultaId={consultaId} />
 
           <SectionCard
             icon={AlertTriangle}

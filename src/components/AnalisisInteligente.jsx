@@ -57,7 +57,7 @@ const titleCase = (value) => {
 const API_URL = process.env.REACT_APP_API_URL;
 
 // Markdown mínimo (### títulos, viñetas, **negrita**) para el análisis de IA.
-function MarkdownSimple({ texto }) {
+export function MarkdownSimple({ texto }) {
   const html = useMemo(() => {
     const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
     return esc(texto || "")
