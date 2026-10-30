@@ -3,7 +3,7 @@
 // cobertura y hallazgos relevantes a partir de los resultados (reglas).
 // El bloque "Resumen ejecutivo" está preparado para, en una segunda fase,
 // reemplazar la narrativa por reglas con una generada por IA (ver onGenerarIA).
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ShieldCheck,
   ShieldAlert,
@@ -54,9 +54,31 @@ const titleCase = (value) => {
     .join(" ");
 };
 
+const API_URL = process.env.REACT_APP_API_URL;
+
+// Markdown mínimo (### títulos, viñetas, **negrita**) para el análisis de IA.
+function MarkdownSimple({ texto }) {
+  const html = useMemo(() => {
+    const esc = (t) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return esc(texto || "")
+      .split("\n")
+      .map((l) => {
+        const b = l.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+        if (/^#{1,4}\s/.test(l)) return `<h5 class="mt-3 mb-1 text-[11px] font-black uppercase tracking-widest text-brand">${b.replace(/^#{1,4}\s/, "")}</h5>`;
+        if (/^\s*[-*•]\s/.test(l)) return `<li class="ml-4 list-disc">${b.replace(/^\s*[-*•]\s/, "")}</li>`;
+        return l.trim() ? `<p>${b}</p>` : "";
+      })
+      .join("");
+  }, [texto]);
+  // El HTML sale de texto escapado arriba: no se inyecta contenido sin escapar.
+  // eslint-disable-next-line react/no-danger
+  return <div className="space-y-1 text-sm leading-relaxed text-content" dangerouslySetInnerHTML={{ __html: html }} />;
+}
+
 export default function AnalisisInteligente({
   detalle = [],
   consulta = null,
+  consultaId = null,
   onVerHallazgo,
   onIrAResultados,
   onGenerarIA, // reservado para la fase IA; si no se pasa, se oculta el botón
@@ -209,6 +231,23 @@ export default function AnalisisInteligente({
     return partes.join(" ");
   }, [stats, nombre, documento]);
 
+  // Análisis del backend: plantilla rotativa (sin hallazgos) o IA anonimizada (con hallazgos).
+  const idConsulta = consultaId || consulta?.id;
+  const [analisis, setAnalisis] = useState({ modo: "", texto: "", aviso: "", cargando: false });
+  useEffect(() => {
+    if (!idConsulta || !API_URL || stats.total === 0) return undefined;
+    let vivo = true;
+    setAnalisis((a) => ({ ...a, cargando: true }));
+    fetch(`${API_URL}/api/consultas/${idConsulta}/analisis-ia/`, {
+      headers: { Authorization: `Token ${localStorage.getItem("token")}` },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (vivo) setAnalisis({ modo: d?.modo || "", texto: d?.texto || "", aviso: d?.aviso || "", cargando: false }); })
+      .catch(() => { if (vivo) setAnalisis({ modo: "", texto: "", aviso: "", cargando: false }); });
+    return () => { vivo = false; };
+    // Se vuelve a pedir cuando cambian los hallazgos (p. ej. al terminar fuentes pendientes).
+  }, [idConsulta, stats.total, stats.hallazgos.length]);
+
   const NivelIcon = nivelUI.Icon;
   const maxTipo = Math.max(1, ...stats.tipos.map((t) => t.total));
 
@@ -303,7 +342,15 @@ export default function AnalisisInteligente({
           <h4 className="text-[11px] font-bold uppercase tracking-widest text-brand flex items-center gap-2">
             <Search size={14} /> Resumen ejecutivo
           </h4>
-          {typeof onGenerarIA === "function" ? (
+          {analisis.modo === "ia" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-brand">
+              <Sparkles size={10} /> IA · anonimizado
+            </span>
+          ) : analisis.cargando ? (
+            <span className="rounded-full bg-content/5 border border-line/15 px-2 py-0.5 text-[9px] font-bold uppercase tracking-widest text-muted animate-pulse">
+              Analizando…
+            </span>
+          ) : typeof onGenerarIA === "function" ? (
             <button
               onClick={onGenerarIA}
               className="inline-flex items-center gap-1.5 rounded-lg border border-brand/25 bg-brand/10 px-2.5 py-1 text-[11px] font-bold text-brand hover:bg-brand/15 transition-colors"
@@ -316,7 +363,16 @@ export default function AnalisisInteligente({
             </span>
           )}
         </div>
-        <p className="text-sm text-content leading-relaxed">{narrativa}</p>
+        {analisis.modo === "ia" && analisis.texto ? (
+          <>
+            <MarkdownSimple texto={analisis.texto} />
+            {analisis.aviso && <p className="mt-3 border-t border-line/15 pt-2 text-[10px] text-muted">{analisis.aviso}</p>}
+          </>
+        ) : (
+          <p className="text-sm text-content leading-relaxed">
+            {analisis.modo === "plantilla" && analisis.texto ? analisis.texto : narrativa}
+          </p>
+        )}
       </section>
 
       {/* KPIs */}

@@ -8,6 +8,7 @@ import Terminos from "../components/Terminos";
 import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import ConsultaMasivaModal from "../components/ConsultaMasivaModal";
 import LotesFuentes from "../components/LotesFuentes";
+import TextoAutorizacion from "../components/TextoAutorizacion";
 
 // El cliente pidió administrar el modo únicamente desde el control global.
 // Se conserva el selector por fuente detrás de esta bandera para poder
@@ -787,7 +788,7 @@ export default function ConsultaMedida() {
                       className="accent-brand w-4 h-4 cursor-pointer"
                     />
                     <span className="text-xs text-content/85 group-hover:text-content transition-colors">
-                      Declaro bajo mi responsabilidad que cuento con la autorización previa del titular de los datos personales objeto de consulta o con un fundamento legal válido que me habilita para realizarla, y que utilizaré la información exclusivamente para finalidades legítimas y autorizadas
+                      <TextoAutorizacion />
                     </span>
                   </label>
                 </div>

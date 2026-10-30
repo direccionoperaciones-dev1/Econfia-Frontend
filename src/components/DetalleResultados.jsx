@@ -1242,6 +1242,7 @@ export default function DetalleResultados({ consultaId, consulta = null }) {
           <AnalisisInteligente
             detalle={detalle}
             consulta={consulta}
+            consultaId={consultaId}
             onVerHallazgo={(item, e) => openResultadoModal(item, e)}
             onIrAResultados={() => setTab("resultados")}
           />
@@ -1735,6 +1736,30 @@ export default function DetalleResultados({ consultaId, consulta = null }) {
                           >
                             Ver detalle
                           </button>
+                        </div>
+                      ))}
+                    </section>
+                  ) : null}
+
+                  {/* Módulo de Mediación Policía (MMP) — detalle de cada mediación (informativo) */}
+                  {resultadoModal.datos_extra?.mediaciones?.length > 0 ? (
+                    <section className="space-y-2">
+                      <h4 className="text-[10px] font-bold uppercase tracking-widest text-sky-400 px-1">
+                        Mediaciones policiales ({resultadoModal.datos_extra.mediaciones.length}) · informativo, no es un antecedente
+                      </h4>
+                      {resultadoModal.datos_extra.mediaciones.map((m, i) => (
+                        <div key={i} className="rounded-xl border border-sky-500/25 bg-sky-950/10 px-4 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="font-mono text-xs font-bold text-sky-300">{m.codigo || "Sin código"}</p>
+                            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold ${String(m.rol).startsWith("Invitado") ? "bg-amber-500/15 text-amber-300" : "bg-emerald-500/15 text-emerald-300"}`}>
+                              {m.rol}
+                            </span>
+                          </div>
+                          <div className="mt-2 grid gap-1 text-[11px] text-muted sm:grid-cols-2">
+                            <p><span className="font-semibold text-content/80">Solicitantes:</span> {m.solicitantes || "—"}</p>
+                            <p><span className="font-semibold text-content/80">Invitados:</span> {m.invitados || "—"}</p>
+                            <p><span className="font-semibold text-content/80">Lugar:</span> {[m.municipio, m.departamento].filter(Boolean).join(" · ") || "—"}</p>
+                          </div>
                         </div>
                       ))}
                     </section>

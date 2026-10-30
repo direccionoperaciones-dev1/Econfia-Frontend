@@ -22,6 +22,7 @@ import LogoOrganizacion from "../components/LogoOrganizacion";
 import Terminos from "../components/Terminos";
 import AvisoTratamientoDatos from "../components/AvisoTratamientoDatos";
 import Toast from "../components/Toast";
+import TextoAutorizacion from "../components/TextoAutorizacion";
 
 const DOCUMENTOS = ["CC", "TI", "CE", "PPT", "PEP", "NIT"];
 
@@ -520,7 +521,7 @@ export default function ConsultaConsolidadoRiesgo() {
             </label>
             <label className="mt-2 flex items-center gap-2 text-xs text-muted">
               <input type="checkbox" checked={consentimiento} onChange={(e) => setConsentimiento(e.target.checked)} className="accent-cyan-500" />
-              Declaro bajo mi responsabilidad que cuento con la autorización previa del titular de los datos personales objeto de consulta o con un fundamento legal válido que me habilita para realizarla, y que utilizaré la información exclusivamente para finalidades legítimas y autorizadas (incluye DataCrédito y SNR)
+              <TextoAutorizacion extra=" (incluye DataCrédito y SNR)" />
             </label>
             <AvisoTratamientoDatos className="mt-2" />
             <button disabled={loading || !cedula.trim() || !acepta || !consentimiento} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 px-4 py-2.5 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">

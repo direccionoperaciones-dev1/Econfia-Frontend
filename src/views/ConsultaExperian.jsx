@@ -10,6 +10,7 @@ import {
   EXPERIAN_DOCUMENT_OPTIONS,
   getExperianSubjectField,
 } from "../utils/experian";
+import TextoAutorizacion from "../components/TextoAutorizacion";
 
 function buildAuthorizedName() {
   try {
@@ -267,7 +268,7 @@ export default function ConsultaExperian() {
                         className="h-4 w-4 cursor-pointer accent-brand"
                       />
                       <span className="text-xs text-content/85 transition-colors group-hover:text-content">
-                        Declaro bajo mi responsabilidad que cuento con la autorización previa del titular de los datos personales objeto de consulta o con un fundamento legal válido que me habilita para realizarla, y que utilizaré la información exclusivamente para finalidades legítimas y autorizadas
+                        <TextoAutorizacion />
                       </span>
                     </label>
                   </div>

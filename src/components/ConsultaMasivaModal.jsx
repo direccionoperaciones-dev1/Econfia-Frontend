@@ -13,6 +13,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import Terminos from "./Terminos";
 import ModalSeleccionFuentes from "./ModalSeleccionFuentes";
+import TextoAutorizacion from "./TextoAutorizacion";
 
 const TIPOS_DOC = ["CC", "TI", "CE", "PPT", "PEP", "NIT"];
 const MAX_MANUAL = 5;
@@ -388,7 +389,7 @@ export default function ConsultaMasivaModal({
                 className="accent-brand w-4 h-4 cursor-pointer mt-0.5 flex-shrink-0"
               />
               <span className="text-xs text-white/80 group-hover:text-white/100 transition-colors leading-relaxed">
-                Declaro bajo mi responsabilidad que cuento con la autorización previa del titular de los datos personales objeto de consulta o con un fundamento legal válido que me habilita para realizarla, y que utilizaré la información exclusivamente para finalidades legítimas y autorizadas
+                <TextoAutorizacion />
               </span>
             </label>
 
