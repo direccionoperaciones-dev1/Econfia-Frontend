@@ -39,7 +39,7 @@ const newItem = () => ({
   usuarios: "", disponibilidad: "", beneficios: "", plan_descripcion: "",
 });
 const newProposal = () => ({
-  cliente_nombre: "", cliente_empresa: "", cliente_email: "",
+  cliente_nombre: "", cliente_empresa: "", cliente_email: "", correos_adicionales: [],
   moneda: "COP", descuento_porcentaje: "0",
   valida_hasta: defaultExpiry(), observaciones: "",
   items: [newItem()],
@@ -280,6 +280,7 @@ export default function AdminPlanes() {
     const payload = {
       cliente_nombre: proposalForm.cliente_nombre, cliente_empresa: proposalForm.cliente_empresa,
       cliente_email: proposalForm.cliente_email, moneda: proposalForm.moneda,
+      correos_adicionales: proposalForm.correos_adicionales.map((c) => c.trim()).filter(Boolean),
       descuento_porcentaje: Number(proposalForm.descuento_porcentaje || 0),
       valida_hasta: proposalForm.valida_hasta, observaciones: proposalForm.observaciones,
       items: proposalForm.items.map((item) => ({
@@ -326,6 +327,7 @@ export default function AdminPlanes() {
     setProposalForm({
       cliente_nombre: proposal.cliente_nombre, cliente_empresa: proposal.cliente_empresa || "",
       cliente_email: proposal.cliente_email, moneda: proposal.moneda || "COP",
+      correos_adicionales: proposal.correos_adicionales || [],
       descuento_porcentaje: String(proposal.descuento_porcentaje), valida_hasta: proposal.valida_hasta,
       observaciones: proposal.observaciones || "", items: items.length ? items : [newItem()],
     });
@@ -333,7 +335,8 @@ export default function AdminPlanes() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
   const sendProposal = async (proposal) => {
-    if (!window.confirm(`¿Enviar la propuesta #${proposal.id} a ${proposal.cliente_email}?`)) return;
+    const destinatarios = [proposal.cliente_email, ...(proposal.correos_adicionales || [])].join(", ");
+    if (!window.confirm(`¿Enviar la propuesta #${proposal.id} a ${destinatarios}?`)) return;
     setSendingId(proposal.id);
     try { await api(`/api/propuestas/${proposal.id}/enviar/`, { method: "POST" }); setToast({ type: "success", message: "Propuesta enviada por correo." }); await loadData(); }
     catch (error) { setToast({ type: "error", message: error.message }); }
@@ -402,6 +405,16 @@ export default function AdminPlanes() {
               <Field label="Empresa"><input className={inputClass} value={proposalForm.cliente_empresa} onChange={(e) => setProposalForm({ ...proposalForm, cliente_empresa: e.target.value })} /></Field>
               <Field label="Correo"><input className={inputClass} type="email" value={proposalForm.cliente_email} onChange={(e) => setProposalForm({ ...proposalForm, cliente_email: e.target.value })} required /></Field>
               <Field label="Moneda de la propuesta"><select className={inputClass} value={proposalForm.moneda} onChange={(e) => changeProposalCurrency(e.target.value)}><option value="COP">COP — Peso colombiano</option><option value="USD" disabled={!trm}>USD — Dólar con TRM</option></select></Field>
+            </div>
+            <div className="mt-3">
+              {proposalForm.correos_adicionales.length > 0 && <div className="mb-2 grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+                {proposalForm.correos_adicionales.map((correo, i) => <div key={i} className="flex items-center gap-2">
+                  <input className={inputClass} type="email" placeholder="otro@empresa.com" value={correo} onChange={(e) => setProposalForm((current) => ({ ...current, correos_adicionales: current.correos_adicionales.map((c, j) => j === i ? e.target.value : c) }))} required />
+                  <button type="button" onClick={() => setProposalForm((current) => ({ ...current, correos_adicionales: current.correos_adicionales.filter((_, j) => j !== i) }))} className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-red-400/20 bg-red-500/10 text-lg font-bold text-red-500" aria-label="Quitar correo">×</button>
+                </div>)}
+              </div>}
+              <button type="button" disabled={proposalForm.correos_adicionales.length >= 10} onClick={() => setProposalForm((current) => ({ ...current, correos_adicionales: [...current.correos_adicionales, ""] }))} className="text-sm font-bold text-brand hover:underline disabled:opacity-50">+ Agregar otro correo</button>
+              <span className="ml-2 text-xs text-muted">La propuesta llega a todos los correos.</span>
             </div>
 
             <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
@@ -569,7 +582,7 @@ function ProposalsTable({ loading, propuestas, sendingId, onSend, onEdit, onDele
     <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Propuesta</th><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Plan</th><th className="px-3 py-3">Total</th><th className="px-3 py-3">Vigencia</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
     <tbody>{loading ? <tr><td colSpan="7" className="px-5 py-12 text-center text-muted">Cargando propuestas…</td></tr> : propuestas.length === 0 ? <tr><td colSpan="7" className="px-5 py-12 text-center text-muted">Aún no hay propuestas comerciales.</td></tr> : propuestas.map((proposal) => <tr key={proposal.id} className="border-t border-line/10 hover:bg-brand/[0.04]">
       <td className="px-5 py-4"><div className="font-black">#{proposal.id}</div><div className="text-xs text-muted">{new Date(proposal.creada).toLocaleDateString("es-CO")}</div></td>
-      <td className="px-3 py-4"><div className="font-bold">{proposal.cliente_nombre}</div><div className="text-xs text-muted">{proposal.cliente_email}</div>{proposal.cliente_empresa && <div className="text-xs text-muted">{proposal.cliente_empresa}</div>}</td>
+      <td className="px-3 py-4"><div className="font-bold">{proposal.cliente_nombre}</div><div className="text-xs text-muted">{proposal.cliente_email}{(proposal.correos_adicionales || []).length > 0 && ` +${proposal.correos_adicionales.length}`}</div>{proposal.cliente_empresa && <div className="text-xs text-muted">{proposal.cliente_empresa}</div>}</td>
       <td className="px-3 py-4">{(proposal.items || []).length ? proposal.items.map((item) => <div key={item.id} className="text-xs"><span className="font-semibold text-content">{item.plan_nombre}</span> <span className="text-muted">× {Number(item.cantidad).toLocaleString("es-CO")}</span></div>) : <div className="font-semibold">{proposal.plan_nombre}</div>}{(proposal.adjuntos || []).length > 0 && <div className="mt-1 text-[10px] text-muted">📎 {proposal.adjuntos.length} archivo(s)</div>}</td><td className="px-3 py-4 font-black text-brand">{money(proposal.total, proposal.moneda)}</td><td className="px-3 py-4">{new Date(`${proposal.valida_hasta}T00:00:00`).toLocaleDateString("es-CO")}</td>
       <td className="px-3 py-4"><select className="rounded-lg border border-line/20 bg-surface px-2 py-1.5 text-xs font-bold text-content" value={proposal.estado} onChange={(e) => onStatus(proposal, e.target.value)}>{ESTADOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{proposal.fecha_envio && <div className="mt-1 text-[10px] text-muted">Enviada {new Date(proposal.fecha_envio).toLocaleString("es-CO")}</div>}<div className={`mt-1 text-[10px] font-semibold ${proposal.vistas ? "text-emerald-600" : "text-muted"}`} title={proposal.vista_ultima ? `Última vez: ${new Date(proposal.vista_ultima).toLocaleString("es-CO")}` : ""}>👁 {proposal.vistas ? `Abierta ${proposal.vistas} ${proposal.vistas === 1 ? "vez" : "veces"}` : "Sin abrir"}</div></td>
       <td className="px-5 py-4"><div className="flex justify-end gap-2"><button onClick={() => onSend(proposal)} disabled={sendingId === proposal.id} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white disabled:opacity-60">{sendingId === proposal.id ? "Enviando…" : proposal.estado === "enviada" ? "Reenviar" : "Enviar"}</button>{proposal.enlace_publico && <a href={`${proposal.enlace_publico}?preview=1`} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-1.5 font-semibold text-violet-600">Ver</a>}<Action onClick={() => onEdit(proposal)} tone="brand">Editar</Action><Action onClick={() => onDelete(proposal)} tone="red">Eliminar</Action></div></td>
