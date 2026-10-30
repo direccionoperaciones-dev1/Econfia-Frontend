@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import IntegrityPreview from "../components/IntegrityPreview";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -224,7 +225,10 @@ export function ConsolidadoVista({ data }) {
         : categoria === "bajo" ? "text-emerald-400 border-emerald-500/40 bg-emerald-500/10"
           : "text-muted border-line/20 bg-surface-2/60";
   const [fuenteAbierta, setFuenteAbierta] = useState(null);
+  const [pestana, setPestana] = useState("preview");
   const [descargando, setDescargando] = useState(false);
+  // Consulta EconfiaFast del expediente: se muestra con el mismo panel de fuentes que las demás consultas.
+  const fastId = (data.fuentes || []).find((f) => f.clave === "fast")?.consulta_id;
   const [errorPdf, setErrorPdf] = useState("");
 
   // El PDF se arma completo en el backend (resumen + informes de cada producto).
@@ -284,6 +288,22 @@ export function ConsolidadoVista({ data }) {
         </div>
       </section>
 
+      <div className="flex flex-wrap gap-1 rounded-2xl border border-line/15 bg-surface/80 p-1.5">
+        {[["preview", "Previsualización"], ["fuentes", "Fuentes (listas y antecedentes)"], ["productos", "Productos"]].map(([clave, texto]) => (
+          <button key={clave} type="button" onClick={() => setPestana(clave)}
+            className={`rounded-xl px-4 py-2 text-sm font-bold transition ${pestana === clave ? "bg-gradient-to-r from-cyan-500 to-blue-600 text-white shadow" : "text-muted hover:text-content"}`}>
+            {texto}
+          </button>
+        ))}
+      </div>
+
+      {pestana === "preview" && <IntegrityPreview consultaId={data.id} />}
+
+      {pestana === "fuentes" && (fastId
+        ? <div className="min-h-[60vh]"><DetalleResultados consultaId={fastId} /></div>
+        : <p className="rounded-2xl border border-line/15 bg-surface/75 p-5 text-sm text-muted">Aún no hay una consulta EconfiaFast para este expediente.</p>)}
+
+      {pestana === "productos" && <>
       <section>
         <h3 className="mb-3 flex items-center gap-2 text-lg font-black"><Database size={19} className="text-cyan-400" /> Último dato por producto</h3>
         <p className="-mt-2 mb-3 text-xs text-muted">Si el dato sigue vigente se reutiliza; si venció, se consulta solo con el plan activo y se descuenta de la bolsa de ese producto.</p>
@@ -339,6 +359,7 @@ export function ConsolidadoVista({ data }) {
           </div>
         )}
       </section>
+      </>}
     </div>
   );
 }
