@@ -110,6 +110,60 @@ describe("presentación", () => {
   });
 });
 
+describe("propuesta guardada antes de un cambio de precio", () => {
+  it("avisa el precio vigente y lo aplica al cambiar la cantidad", async () => {
+    const vieja = {
+      id: 3, creada: "2026-11-05T10:00:00", cliente_nombre: "Edgar", cliente_email: "e@example.com", adjuntos: [],
+      total: "4000", moneda: "COP", valida_hasta: "2026-11-20", estado: "borrador", descuento_porcentaje: "0.00",
+      items: [{ id: 1, plan: 1, producto: "", plan_nombre: "EconfiaFast", cantidad: 1, precio_unitario: "4000.00", precio_paquete: null, tarifa_origen: null, descuento_porcentaje: "0.00", descuento_volumen_porcentaje: "0.00", precio_consulta_adicional: null, es_bono: false, fuentes_detalle: [] }],
+    };
+    preparar(PLANES, [vieja]);
+    await abrirPropuestas();
+    fireEvent.click(screen.getByRole("button", { name: "Editar" }));
+    expect(screen.getByLabelText("Descuento de EconfiaFast")).toHaveValue(0);
+    expect(screen.getByText(/no es el vigente/)).toHaveTextContent("$ 5.000");
+    fireEvent.click(screen.getByRole("button", { name: "Usar precio vigente" }));
+    expect(total()).toHaveTextContent("5.000");
+    expect(screen.queryByText(/no es el vigente/)).not.toBeInTheDocument();
+  });
+});
+
+describe("ahorro de cada tarifa", () => {
+  it("se calcula del precio y el precio se calcula del ahorro", async () => {
+    preparar([plan(14, "inmuebles-snr", "Econfia Asset Search", 0, { tarifas: [tarifa(31, "", 1, 30000, 30000), tarifa(47, "", 200, 15009, 3001800)] })]);
+    render(<AdminPlanes />);
+    fireEvent.click(await screen.findByRole("button", { name: "Tarifas" }));
+    const ahorros = screen.getAllByLabelText("Ahorro porcentual");
+    // Al abrir todavía muestra lo guardado; al tocar el precio se recalcula.
+    fireEvent.change(screen.getAllByLabelText("Precio unitario")[1], { target: { value: "15.010" } });
+    expect(ahorros[1]).toHaveValue(49.97);
+    expect(ahorros[0]).toHaveValue(0);
+
+    fireEvent.change(ahorros[1], { target: { value: "50" } });
+    expect(screen.getAllByLabelText("Precio unitario")[1]).toHaveValue("15.000");
+    expect(screen.getAllByLabelText("Precio del paquete")[1]).toHaveValue("3.000.000");
+    expect(ahorros[1]).toHaveValue(50);
+  });
+});
+
+describe("cotizar desde la tabla", () => {
+  it("calcula el valor para la cantidad escrita, con escala y descuento", async () => {
+    preparar([{ ...FAST, descuento_porcentaje: "10" }, EXPERIAN]);
+    render(<AdminPlanes />);
+    const fast = await screen.findByLabelText("Cotizar EconfiaFast");
+    fireEvent.change(fast, { target: { value: "100" } });
+    // 100 consultas en el rango de 1: 100 × 5.000 = 500.000, menos 10 % = 450.000.
+    expect(fast.closest("td")).toHaveTextContent("= $ 450.000");
+    fireEvent.change(fast, { target: { value: "600" } });
+    // 600 en el rango de 500: 600 × 4.000 = 2.400.000, menos 10 % = 2.160.000.
+    expect(fast.closest("td")).toHaveTextContent("= $ 2.160.000");
+
+    const credit = screen.getByLabelText("Cotizar Econfia Credit Report");
+    fireEvent.change(credit, { target: { value: "20" } });
+    expect(credit.closest("td")).toHaveTextContent("= $ 600.000");
+  });
+});
+
 describe("descuento por defecto", () => {
   it("se pone en la tabla y muestra el precio con descuento", async () => {
     preparar([{ ...EXPERIAN, descuentos_productos: { adjudicator: "5" } }, FAST]);

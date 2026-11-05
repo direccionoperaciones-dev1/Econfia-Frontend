@@ -11,6 +11,11 @@ const money = (value, currency = "COP") => new Intl.NumberFormat("es-CO", {
 }).format(Number(value || 0));
 // Fecha "YYYY-MM-DD" en hora local: nunca restar un día por zona horaria.
 const fecha = (iso) => iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" }) : "";
+const PASOS = [
+  [1, "Revisa", "Mira cada servicio, sus beneficios y el valor total."],
+  [2, "Confirma", "Responde el correo en el que recibiste esta propuesta."],
+  [3, "Empieza", "Activamos tu acceso y te acompañamos en el arranque."],
+];
 const pct = (v) => Number(v || 0).toLocaleString("es-CO", { maximumFractionDigits: 2 });
 
 export default function PropuestaPublica() {
@@ -39,6 +44,9 @@ export default function PropuestaPublica() {
   const videos = data.adjuntos.filter((a) => a.tipo === "video");
   const pdfs = data.adjuntos.filter((a) => a.tipo === "pdf");
   const para = data.cliente_empresa || data.cliente_nombre;
+  // Fechas en hora local (Colombia): nunca restar un día.
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const diasRestantes = Math.round((new Date(`${data.valida_hasta}T00:00:00`) - hoy) / 86400000);
 
   return (
     <div className="min-h-screen bg-[#0d0724] text-white print:bg-white print:text-black">
@@ -53,11 +61,11 @@ export default function PropuestaPublica() {
           <div className="mt-14 max-w-3xl md:mt-20">
             <div className="text-xs font-bold uppercase tracking-[0.3em] text-violet-200">Propuesta comercial N.º {data.numero}</div>
             <h1 className="mt-3 text-4xl font-black leading-tight md:text-6xl">Una propuesta a la medida de <span className="bg-gradient-to-r from-violet-200 to-fuchsia-200 bg-clip-text text-transparent">{para}</span></h1>
-            <p className="mt-5 max-w-2xl text-base leading-7 text-violet-100/80">Hola {data.cliente_nombre}, preparamos {data.items.length === 1 ? "este plan" : `estos ${data.items.length} planes`} para que verifiques personas y empresas con rapidez, trazabilidad y respaldo legal.</p>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-violet-100/80">Hola {data.cliente_nombre}, preparamos {data.items.length === 1 ? "este servicio" : `estos ${data.items.length} servicios`} para que verifiques personas y empresas con rapidez, trazabilidad y respaldo legal.</p>
           </div>
           <div className="mt-10 grid gap-3 sm:grid-cols-3">
             <Kpi label="Inversión total" valor={`${money(data.total, data.moneda)}`} sub={data.moneda} grande />
-            <Kpi label="Planes incluidos" valor={data.items.length} sub={data.items.map((i) => i.plan_nombre).join(" · ")} />
+            <Kpi label="Servicios incluidos" valor={data.items.length} sub={data.items.map((i) => i.plan_nombre).join(" · ")} />
             <Kpi label={data.vencida ? "Vigencia" : "Válida hasta"} valor={data.vencida ? "Vencida" : fecha(data.valida_hasta)} sub={data.vencida ? `Venció el ${fecha(data.valida_hasta)}` : `Emitida el ${fecha(data.fecha)}`} alerta={data.vencida} />
           </div>
         </div>
@@ -74,7 +82,7 @@ export default function PropuestaPublica() {
         </section>}
 
         <section className="mb-14">
-          <Titulo kicker="Lo que te proponemos" titulo={data.items.length === 1 ? "Tu plan" : "Tus planes"} />
+          <Titulo kicker="Lo que te proponemos" titulo={data.items.length === 1 ? "Tu servicio" : "Tus servicios"} />
           <div className={`grid gap-5 ${data.items.length > 1 ? "lg:grid-cols-2" : ""}`}>
             {data.items.map((item, i) => <article key={i} className="flex flex-col overflow-hidden rounded-3xl border border-violet-300/15 bg-gradient-to-b from-white/[0.07] to-white/[0.02] shadow-2xl shadow-violet-950/40">
               <div className="border-b border-white/10 p-6">
@@ -131,15 +139,30 @@ export default function PropuestaPublica() {
           </div>
         </section>}
 
-        <section className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-          {data.observaciones ? <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
-            <Titulo kicker="Condiciones" titulo="Observaciones" compacto />
-            <p className="whitespace-pre-line text-sm leading-7 text-violet-50/85">{data.observaciones}</p>
-          </div> : <div className="hidden lg:block" />}
-          <div className="rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-600 p-6 shadow-2xl shadow-violet-900/50">
+        <section className="grid items-start gap-5 lg:grid-cols-[1.4fr_1fr]">
+          <div className="space-y-5">
+            <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+              <Titulo kicker="Cómo seguimos" titulo="Así de fácil empiezas" compacto />
+              <ol className="grid gap-3 sm:grid-cols-3">
+                {PASOS.map(([n, titulo, texto]) => <li key={n} className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <span className="grid h-8 w-8 place-items-center rounded-full bg-violet-500/30 text-sm font-black text-violet-100">{n}</span>
+                  <div className="mt-3 font-bold">{titulo}</div>
+                  <p className="mt-1 text-sm leading-6 text-violet-100/70">{texto}</p>
+                </li>)}
+              </ol>
+              <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${data.vencida ? "bg-red-500/15 text-red-200" : "bg-amber-400/10 text-amber-200"}`}>
+                {data.vencida ? `⚠️ Esta propuesta venció el ${fecha(data.valida_hasta)}.` : `⏳ Válida hasta el ${fecha(data.valida_hasta)}${diasRestantes > 0 ? `: quedan ${diasRestantes} día${diasRestantes === 1 ? "" : "s"}` : ": hoy es el último día"}.`}
+              </div>
+            </div>
+            {data.observaciones && <div className="rounded-3xl border border-white/10 bg-white/5 p-6">
+              <Titulo kicker="Condiciones" titulo="Observaciones" compacto />
+              <p className="whitespace-pre-line text-sm leading-7 text-violet-50/85">{data.observaciones}</p>
+            </div>}
+          </div>
+          <div className="rounded-3xl bg-gradient-to-br from-violet-600 to-indigo-600 p-6 shadow-2xl shadow-violet-900/50 lg:sticky lg:top-6">
             <div className="text-xs font-bold uppercase tracking-[0.25em] text-violet-100">Resumen de inversión</div>
             <div className="mt-4 space-y-2 text-sm">
-              {data.items.map((item, i) => <Fila key={i} k={item.plan_nombre} v={money(item.total, data.moneda)} claro />)}
+              {data.items.map((item, i) => <Fila key={i} k={`${item.es_bono ? "🎁 " : ""}${item.plan_nombre} × ${Number(item.cantidad).toLocaleString("es-CO")}`} v={item.es_bono ? "Regalo" : money(item.total, data.moneda)} claro />)}
               {Number(data.descuento_porcentaje) > 0 && <><div className="border-t border-white/20 pt-2"><Fila k="Subtotal" v={money(data.subtotal, data.moneda)} claro /></div><Fila k="Descuento comercial" v={`−${pct(data.descuento_porcentaje)}%`} claro /></>}
             </div>
             <div className="mt-4 flex items-end justify-between border-t border-white/25 pt-4"><span className="text-sm font-bold">Total</span><span className="text-3xl font-black">{money(data.total, data.moneda)}</span></div>
