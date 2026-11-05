@@ -44,7 +44,7 @@ export default function AnalisisFinancieroIA({ producto, consultaId }) {
         </div>
         <h3 className="text-base font-bold text-content">Análisis inteligente del comportamiento financiero</h3>
         <span className="rounded-full border border-brand/25 bg-brand/[0.08] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-widest text-brand">
-          {estado.cargando ? "Analizando…" : estado.modo === "ia" ? "IA · anonimizado" : "Resumen automático"}
+          {estado.cargando ? "Analizando…" : estado.modo === "ia" ? "Análisis con IA" : "Resumen automático"}
         </span>
       </div>
       <div className="relative mt-3">

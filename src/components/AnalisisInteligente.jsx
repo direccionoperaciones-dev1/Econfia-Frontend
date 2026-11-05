@@ -369,9 +369,16 @@ export default function AnalisisInteligente({
             {analisis.aviso && <p className="mt-3 border-t border-line/15 pt-2 text-[10px] text-muted">{analisis.aviso}</p>}
           </>
         ) : (
-          <p className="text-sm text-content leading-relaxed">
-            {analisis.modo === "plantilla" && analisis.texto ? analisis.texto : narrativa}
-          </p>
+          <>
+            <p className="text-sm text-content leading-relaxed">
+              {analisis.modo === "plantilla" && analisis.texto ? analisis.texto : narrativa}
+            </p>
+            {analisis.modo === "reglas" && analisis.aviso && (
+              <p className="mt-3 border-t border-line/15 pt-2 text-[10px] text-muted">
+                Análisis con IA no disponible: {analisis.aviso}
+              </p>
+            )}
+          </>
         )}
       </section>
 
