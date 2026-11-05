@@ -32,15 +32,21 @@ const FUENTES = [{ nombre: "ofac", nombre_pila: "Lista OFAC" }, { nombre: "rues"
 
 const respuesta = (data) => ({ ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) });
 
-function preparar(planes = PLANES) {
+let parches = [];
+function preparar(planes = PLANES, propuestas = []) {
   const envios = [];
+  parches = [];
   global.fetch = jest.fn(async (url, options = {}) => {
+    if (options.method === "PATCH") {
+      parches.push({ url, cuerpo: JSON.parse(options.body) });
+      return respuesta({});
+    }
     if (url.includes("/api/propuestas/") && options.method === "POST") {
       envios.push(JSON.parse(options.body));
       return respuesta({ id: 9, adjuntos: [] });
     }
     if (url.endsWith("/api/planes/")) return respuesta(planes);
-    if (url.endsWith("/api/propuestas/")) return respuesta([]);
+    if (url.endsWith("/api/propuestas/")) return respuesta(propuestas);
     if (url.endsWith("/api/fuentes/")) return respuesta(FUENTES);
     return respuesta(null);
   });
@@ -79,6 +85,59 @@ describe("tabla de planes", () => {
     fireEvent.change(screen.getAllByLabelText("Cantidad de consultas")[2], { target: { value: "500" } });
     fireEvent.change(screen.getAllByLabelText("Precio unitario")[2], { target: { value: "26.000" } });
     expect(screen.getAllByLabelText("Precio del paquete")[2]).toHaveValue("13.000.000");
+  });
+});
+
+describe("presentación", () => {
+  it("el catálogo muestra el rango de precio según la cantidad", async () => {
+    preparar();
+    await abrirPropuestas();
+    expect(casilla("EconfiaFast").closest("label")).toHaveTextContent("$ 4.000 a $ 5.000 por consulta, según cantidad");
+    expect(casilla("Polígrafo").closest("label")).toHaveTextContent("$ 100.000 por prueba");
+  });
+
+  it("la tabla de propuestas resume los servicios y despliega el resto", async () => {
+    const items = ["EconfiaFast", "Polígrafo", "Estudio de seguridad", "Econfia Credit Report", "Basic Element"]
+      .map((plan_nombre, i) => ({ id: i + 1, plan_nombre, cantidad: 1, es_bono: false }));
+    preparar(PLANES, [{ id: 3, creada: "2026-11-05T10:00:00", cliente_nombre: "Edgar", cliente_email: "e@example.com", items, adjuntos: [], total: "100", moneda: "COP", valida_hasta: "2026-11-20", estado: "borrador" }]);
+    await abrirPropuestas();
+    expect(screen.getByText("5 servicios")).toBeInTheDocument();
+    expect(screen.queryByText("Basic Element")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "+2 más" }));
+    expect(screen.getByText("Basic Element")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Ver menos" }));
+    expect(screen.queryByText("Basic Element")).not.toBeInTheDocument();
+  });
+});
+
+describe("descuento por defecto", () => {
+  it("se pone en la tabla y muestra el precio con descuento", async () => {
+    preparar([{ ...EXPERIAN, descuentos_productos: { adjudicator: "5" } }, FAST]);
+    render(<AdminPlanes />);
+    const credit = await screen.findByLabelText("Descuento de Econfia Credit Report");
+    fireEvent.change(credit, { target: { value: "10" } });
+    fireEvent.blur(credit);
+    await waitFor(() => expect(parches).toHaveLength(1));
+    expect(parches[0].url).toMatch(/\/api\/planes\/3\/$/);
+    expect(parches[0].cuerpo).toEqual({ descuentos_productos: { adjudicator: "5", "credit-report": 10 } });
+
+    const fast = screen.getByLabelText("Descuento de EconfiaFast");
+    fast.focus();
+    fireEvent.change(fast, { target: { value: "7" } });
+    fireEvent.keyDown(fast, { key: "Enter" });
+    await waitFor(() => expect(parches).toHaveLength(2));
+    expect(parches[1].cuerpo).toEqual({ descuento_porcentaje: 7 });
+
+    // Adjudicator ya trae 5 %: 27.000 pasa a 25.650.
+    expect(screen.getByLabelText("Descuento de Econfia Adjudicator").closest("tr")).toHaveTextContent("25.650");
+  });
+
+  it("entra solo al marcar el producto en la propuesta", async () => {
+    preparar([{ ...EXPERIAN, descuentos_productos: { "credit-report": "10" } }, POLIGRAFO]);
+    await abrirPropuestas();
+    fireEvent.click(casilla("Econfia Credit Report"));
+    expect(screen.getByLabelText("Descuento de Econfia Credit Report")).toHaveValue(10);
+    expect(total()).toHaveTextContent("27.000");
   });
 });
 

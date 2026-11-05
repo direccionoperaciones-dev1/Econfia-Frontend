@@ -20,7 +20,9 @@ const PLAN_NAMES = [
 const SERVICIOS_SEGURIDAD = [
   ["estudio-seguridad", "Estudio de seguridad"], ["poligrafo", "Polígrafo"],
 ];
+const SERVICIOS_ADICIONALES = [["marca-blanca", "Marca blanca"], ["api", "Uso de API"]];
 const esServicioSeguridad = (nombre) => SERVICIOS_SEGURIDAD.some(([value]) => value === nombre);
+const esServicio = (nombre) => esServicioSeguridad(nombre) || SERVICIOS_ADICIONALES.some(([value]) => value === nombre);
 const singular = (plan) => plan?.unidad_singular || "consulta";
 const plural = (plan) => plan?.unidad_plural || "consultas";
 const capitalizar = (texto) => texto.charAt(0).toUpperCase() + texto.slice(1);
@@ -94,12 +96,25 @@ const precioAutomatico = (plan, producto, cantidad, moneda, trm) => {
     precio_consulta_adicional: aplica.precio_consulta_adicional == null ? "" : conv(aplica.precio_consulta_adicional),
   };
 };
-const GRUPOS_CATALOGO = ["Consultas", "Productos Experian", "Servicios de Estudios de Seguridad"];
+const GRUPOS_CATALOGO = ["Consultas", "Productos Experian", "Servicios de Estudios de Seguridad", "Servicios adicionales"];
+// Texto del precio en el catálogo: uno solo o el rango según la cantidad.
+const textoPrecio = (plan, producto, moneda, trm) => {
+  const unitarios = tarifasDe(plan, producto).map((r) => convertCurrency(r.precio_unitario, plan.moneda, moneda, trm));
+  const valores = unitarios.length ? unitarios : [convertCurrency(precioBase(plan, producto), plan.moneda, moneda, trm)];
+  const menor = Math.min(...valores);
+  const mayor = Math.max(...valores);
+  return menor === mayor
+    ? `${money(menor, moneda)} por ${singular(plan)}`
+    : `${money(menor, moneda)} a ${money(mayor, moneda)} por ${singular(plan)}, según cantidad`;
+};
 const armarCatalogo = (planes) => planes.filter((plan) => plan.activo).flatMap((plan) => (
   plan.productos?.length
     ? plan.productos.map((p) => ({ clave: `${plan.id}:${p.clave}`, plan, producto: p.clave, nombre: p.nombre, grupo: "Productos Experian" }))
-    : [{ clave: `${plan.id}:`, plan, producto: "", nombre: plan.nombre_display || plan.nombre, grupo: plan.es_producto ? "Servicios de Estudios de Seguridad" : "Consultas" }]
+    : [{ clave: `${plan.id}:`, plan, producto: "", nombre: plan.nombre_display || plan.nombre, grupo: plan.grupo || (plan.es_producto ? "Servicios de Estudios de Seguridad" : "Consultas") }]
 ));
+// Descuento por defecto que trae cada plan o producto (se configura en la tabla de planes).
+const descuentoDe = (plan, producto) => Number((plan?.productos?.length ? plan?.descuentos_productos?.[producto] : plan?.descuento_porcentaje) || 0);
+const conDescuento = (valor, porcentaje) => Number(valor || 0) * (1 - Number(porcentaje || 0) / 100);
 const claveLinea = (item) => `${item.plan}:${item.producto || ""}`;
 const nombreLinea = (plan, item) => plan?.productos?.find((p) => p.clave === item.producto)?.nombre || plan?.nombre_display || plan?.nombre;
 const inputClass = "w-full rounded-xl border border-line/20 bg-surface px-3 py-2.5 text-sm text-content outline-none transition placeholder:text-muted/60 focus:border-brand/60";
@@ -116,9 +131,10 @@ const convertCurrency = (value, source, target, trm) => {
   if (source === "USD" && target === "COP") return amount * rate;
   return amount;
 };
-const tariffReference = (plan) => (plan.tarifas || [])
-  .filter((rate) => rate.activo)
-  .sort((a, b) => Number(a.cantidad) - Number(b.cantidad))[0] || null;
+const tariffReference = (plan) => {
+  const activas = (plan.tarifas || []).filter((rate) => rate.activo).sort((a, b) => Number(a.cantidad) - Number(b.cantidad));
+  return activas.find((rate) => Number(rate.cantidad) >= 500) || activas[0] || null;
+};
 // Los errores de una línea llegan anidados: {items: [{}, {campo: ["mensaje"]}]}.
 const primerMensaje = (valor) => {
   if (typeof valor === "string") return valor;
@@ -217,6 +233,17 @@ export default function AdminPlanes() {
     } catch (error) { setToast({ type: "error", message: error.message }); }
     finally { setSaving(false); }
   };
+  const saveDiscount = async (plan, producto, valor) => {
+    const porcentaje = Math.min(100, Math.max(0, Number(valor) || 0));
+    const cuerpo = producto
+      ? { descuentos_productos: { ...(plan.descuentos_productos || {}), [producto]: porcentaje } }
+      : { descuento_porcentaje: porcentaje };
+    try {
+      await api(`/api/planes/${plan.id}/`, { method: "PATCH", body: JSON.stringify(cuerpo) });
+      setToast({ type: "success", message: porcentaje > 0 ? `Descuento de ${porcentaje}% guardado.` : "Descuento quitado." });
+      await loadData();
+    } catch (error) { setToast({ type: "error", message: error.message }); }
+  };
   const editPlan = (plan) => {
     setEditId(plan.id);
     setPlanForm({
@@ -309,7 +336,8 @@ export default function AdminPlanes() {
     ...current, items: current.items.map((item, i) => i === index ? { ...item, ...changes } : item),
   }));
   const lineaNueva = (plan, producto, cambios = {}) => ({
-    ...newItem(), plan: String(plan.id), producto, plan_descripcion: plan.descripcion || "", ...cambios,
+    ...newItem(), plan: String(plan.id), producto, plan_descripcion: plan.descripcion || "",
+    descuento_porcentaje: String(descuentoDe(plan, producto)), ...cambios,
   });
   const toggleCatalogo = (entrada) => setProposalForm((current) => {
     const seleccionada = current.items.some((item) => claveLinea(item) === entrada.clave);
@@ -482,12 +510,12 @@ export default function AdminPlanes() {
           <form onSubmit={savePlan} className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg md:p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black text-content">{editId ? "Editar plan" : "Nuevo plan"}</h3>{editId && <button type="button" onClick={resetPlan} className="text-sm font-bold text-muted hover:text-content">Cancelar edición</button>}</div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Field label="Plan o servicio"><select className={inputClass} value={planForm.nombre} onChange={(e) => setPlanForm({ ...planForm, nombre: e.target.value, ...(esServicioSeguridad(e.target.value) ? { periodicidad: "unica" } : {}) })} disabled={Boolean(editId)}><optgroup label="Planes">{PLAN_NAMES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</optgroup><optgroup label="Servicios de Estudios de Seguridad">{SERVICIOS_SEGURIDAD.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</optgroup></select></Field>
+              <Field label="Plan o servicio"><select className={inputClass} value={planForm.nombre} onChange={(e) => setPlanForm({ ...planForm, nombre: e.target.value, ...(esServicioSeguridad(e.target.value) ? { periodicidad: "unica" } : {}) })} disabled={Boolean(editId)}><optgroup label="Planes">{PLAN_NAMES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</optgroup><optgroup label="Servicios de Estudios de Seguridad">{SERVICIOS_SEGURIDAD.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</optgroup><optgroup label="Servicios adicionales">{SERVICIOS_ADICIONALES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</optgroup></select></Field>
               <Field label="Costo interno"><MoneyInput value={planForm.costo} currency={planForm.moneda} onChange={(value) => setPlanForm({ ...planForm, costo: value })} required /></Field>
               <Field label="Precio comercial"><MoneyInput value={planForm.precio} currency={planForm.moneda} onChange={(value) => setPlanForm({ ...planForm, precio: value })} required /></Field>
               <Field label="Moneda"><select className={inputClass} value={planForm.moneda} onChange={(e) => changePlanCurrency(e.target.value)}><option value="COP">COP — Peso colombiano</option><option value="USD" disabled={!trm}>USD — Dólar estadounidense</option></select></Field>
               <Field label="Periodicidad"><select className={inputClass} value={planForm.periodicidad} onChange={(e) => setPlanForm({ ...planForm, periodicidad: e.target.value })}>{PERIODICIDADES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></Field>
-              <Field label={esServicioSeguridad(planForm.nombre) ? "Cantidad incluida" : "Consultas incluidas"}><input className={inputClass} type="number" min="0" placeholder="Sin cupo fijo" value={planForm.consultas_incluidas} onChange={(e) => setPlanForm({ ...planForm, consultas_incluidas: e.target.value })} /></Field>
+              <Field label={esServicio(planForm.nombre) ? "Cantidad incluida" : "Consultas incluidas"}><input className={inputClass} type="number" min="0" placeholder="Sin cupo fijo" value={planForm.consultas_incluidas} onChange={(e) => setPlanForm({ ...planForm, consultas_incluidas: e.target.value })} /></Field>
               <div className="md:col-span-2"><Field label="Descripción"><input className={inputClass} value={planForm.descripcion} onChange={(e) => setPlanForm({ ...planForm, descripcion: e.target.value })} placeholder="Alcance y beneficios del plan" /></Field></div>
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -497,7 +525,7 @@ export default function AdminPlanes() {
             </div>
           </form>
           <AjusteIPCPanel api={api} planes={planes} onApplied={loadData} notify={setToast} />
-          <PlansTable loading={loading} planes={planes} displayCurrency={displayCurrency} trm={trm} onEdit={editPlan} onRates={openRates} onAssign={openAssign} onDelete={deletePlan} />
+          <PlansTable loading={loading} planes={planes} displayCurrency={displayCurrency} trm={trm} onDiscount={saveDiscount} onEdit={editPlan} onRates={openRates} onAssign={openAssign} onDelete={deletePlan} />
         </> : <>
           <form onSubmit={saveProposal} className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg md:p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black text-content">{editingProposalId ? `Editar propuesta #${editingProposalId}` : "Nueva propuesta"}</h3>{editingProposalId && <button type="button" onClick={resetProposal} className="text-sm font-bold text-muted hover:text-content">Cancelar edición</button>}</div>
@@ -534,7 +562,7 @@ export default function AdminPlanes() {
                         const sinPrecio = base <= 0;
                         return <label key={entrada.clave} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition ${marcada ? "border-brand/60 bg-brand/10" : "border-line/15 bg-surface hover:border-brand/30"} ${sinPrecio && !marcada ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
                           <input type="checkbox" className="h-4 w-4 shrink-0 accent-brand" checked={marcada} disabled={sinPrecio && !marcada} onChange={() => toggleCatalogo(entrada)} />
-                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-content">{entrada.nombre}</span><span className={`block text-xs ${sinPrecio ? "font-semibold text-amber-500" : "text-muted"}`}>{sinPrecio ? "Sin precio: ponlo en la pestaña Planes" : `${money(convertCurrency(base, entrada.plan.moneda, proposalForm.moneda, trm), proposalForm.moneda)} por ${singular(entrada.plan)}`}</span></span>
+                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-content">{entrada.nombre}</span><span className={`block text-xs ${sinPrecio ? "font-semibold text-amber-500" : "text-muted"}`}>{sinPrecio ? "Sin precio: ponlo en la pestaña Planes" : textoPrecio(entrada.plan, entrada.producto, proposalForm.moneda, trm)}</span></span>
                         </label>;
                       })}
                     </div>
@@ -670,10 +698,29 @@ function MoneyInput({ value, onChange, currency = "COP", className = "", placeho
   </div>;
 }
 
-function PlansTable({ loading, planes, displayCurrency, trm, onEdit, onRates, onAssign, onDelete }) {
+function DiscountInput({ value, label, onSave }) {
+  const [texto, setTexto] = useState(String(Number(value || 0)));
+  useEffect(() => { setTexto(String(Number(value || 0))); }, [value]);
+  const guardar = () => { if (Number(texto || 0) !== Number(value || 0)) onSave(texto); };
+  return <div className="relative w-[84px]">
+    <input aria-label={label} className={`${inputClass} pr-6 font-bold ${Number(value) > 0 ? "border-emerald-400/50 text-emerald-600" : ""}`} type="number" min="0" max="100" step="0.5" value={texto} onFocus={(e) => e.target.select()} onChange={(e) => setTexto(e.target.value)} onBlur={guardar} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); e.target.blur(); } }} />
+    <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
+  </div>;
+}
+
+function PrecioConDescuento({ valor, porcentaje, currency, nota }) {
+  const final = conDescuento(valor, porcentaje);
+  return <>
+    {porcentaje > 0 && <div className="text-xs text-muted line-through">{money(valor, currency)}</div>}
+    <div className={`font-black ${porcentaje > 0 ? "text-emerald-600" : ""}`}>{money(final, currency)}</div>
+    {nota && <div className="mt-1 text-xs text-muted">{nota}</div>}
+  </>;
+}
+
+function PlansTable({ loading, planes, displayCurrency, trm, onDiscount, onEdit, onRates, onAssign, onDelete }) {
   return <div className="overflow-hidden rounded-[24px] border border-line/15 bg-surface/90 shadow-lg"><div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-sm text-content">
-    <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Plan</th><th className="px-3 py-3">Costo interno</th><th className="px-3 py-3">Valor unitario</th><th className="px-3 py-3">Valor paquete</th><th className="px-3 py-3">Margen</th><th className="px-3 py-3">Condiciones</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
-    <tbody>{loading ? <tr><td colSpan="8" className="px-5 py-12 text-center text-muted">Cargando planes…</td></tr> : planes.length === 0 ? <tr><td colSpan="8" className="px-5 py-12 text-center text-muted">Aún no hay planes.</td></tr> : [...planes].sort((a, b) => Number(Boolean(a.es_producto)) - Number(Boolean(b.es_producto))).map((plan) => {
+    <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Plan</th><th className="px-3 py-3">Costo interno</th><th className="px-3 py-3">Valor unitario</th><th className="px-3 py-3">Valor paquete</th><th className="px-3 py-3">Descuento</th><th className="px-3 py-3">Margen</th><th className="px-3 py-3">Condiciones</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
+    <tbody>{loading ? <tr><td colSpan="9" className="px-5 py-12 text-center text-muted">Cargando planes…</td></tr> : planes.length === 0 ? <tr><td colSpan="9" className="px-5 py-12 text-center text-muted">Aún no hay planes.</td></tr> : [...planes].sort((a, b) => Number(Boolean(a.es_producto)) - Number(Boolean(b.es_producto))).map((plan) => {
       const reference = tariffReference(plan);
       const commercialPriceBase = reference ? Number(reference.precio_paquete) : Number(plan.precio || 0);
       const internalCostBase = Number(plan.costo || 0);
@@ -681,10 +728,11 @@ function PlansTable({ loading, planes, displayCurrency, trm, onEdit, onRates, on
       const unitPrice = reference ? convertCurrency(reference.precio_unitario, plan.moneda, displayCurrency, trm) : 0;
       const internalCost = convertCurrency(internalCostBase, plan.moneda, displayCurrency, trm);
       const hasInternalCost = internalCost > 0;
-      const margin = commercialPrice - internalCost;
+      const descuento = descuentoDe(plan, "");
+      const margin = conDescuento(commercialPrice, descuento) - internalCost;
       if (plan.productos?.length) return <React.Fragment key={plan.id}>
         <tr className="border-t border-line/10 bg-surface-2/40">
-          <td colSpan="7" className="px-5 py-3"><span className="font-black">Plan Experian</span><span className="ml-2 text-xs text-muted">Un solo acceso y saldo, con precio por producto.</span></td>
+          <td colSpan="8" className="px-5 py-3"><span className="font-black">Plan Experian</span><span className="ml-2 text-xs text-muted">Un solo acceso y saldo, con precio por producto.</span></td>
           <td className="px-5 py-3"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Precios</Action><Action onClick={() => onEdit(plan)} tone="brand">Editar</Action><Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action></div></td>
         </tr>
         {plan.productos.map((producto) => {
@@ -692,12 +740,15 @@ function PlansTable({ loading, planes, displayCurrency, trm, onEdit, onRates, on
           const base = tarifas[0];
           const unitario = base ? convertCurrency(base.precio_unitario, plan.moneda, displayCurrency, trm) : 0;
           const costo = base?.costo_unitario != null ? convertCurrency(base.costo_unitario, plan.moneda, displayCurrency, trm) : null;
+          const desc = descuentoDe(plan, producto.clave);
+          const final = conDescuento(unitario, desc);
           return <tr key={producto.clave} className="border-t border-line/10 hover:bg-brand/[0.04]">
             <td className="py-4 pl-9 pr-5 font-black">{producto.nombre}</td>
             <td className="px-3 py-4">{costo != null ? <span className="text-muted">{money(costo, displayCurrency)}</span> : <span className="text-xs font-semibold text-amber-500">Sin definir</span>}</td>
-            <td className="px-3 py-4">{base ? <><div className="font-black">{money(unitario, displayCurrency)}</div><div className="mt-1 text-xs text-muted">Por consulta · {displayCurrency}</div></> : <span className="text-xs font-semibold text-amber-500">Sin precio</span>}</td>
-            <td className="px-3 py-4">{base ? <div className="font-black">{money(convertCurrency(base.precio_paquete, plan.moneda, displayCurrency, trm), displayCurrency)}</div> : <span className="text-xs text-muted">—</span>}{base && <div className="mt-1 text-xs text-muted">{Number(base.cantidad).toLocaleString("es-CO")} consultas · {displayCurrency}</div>}</td>
-            <td className="px-3 py-4">{base && costo != null ? <span className={`font-bold ${unitario < costo ? "text-red-500" : "text-emerald-500"}`}>{money(unitario - costo, displayCurrency)} c/u</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
+            <td className="px-3 py-4">{base ? <PrecioConDescuento valor={unitario} porcentaje={desc} currency={displayCurrency} nota={`Por consulta · ${displayCurrency}`} /> : <span className="text-xs font-semibold text-amber-500">Sin precio</span>}</td>
+            <td className="px-3 py-4">{base ? <PrecioConDescuento valor={convertCurrency(base.precio_paquete, plan.moneda, displayCurrency, trm)} porcentaje={desc} currency={displayCurrency} nota={`${Number(base.cantidad).toLocaleString("es-CO")} ${Number(base.cantidad) === 1 ? "consulta" : "consultas"} · ${displayCurrency}`} /> : <span className="text-xs text-muted">—</span>}</td>
+            <td className="px-3 py-4"><DiscountInput label={`Descuento de ${producto.nombre}`} value={desc} onSave={(valor) => onDiscount(plan, producto.clave, valor)} /></td>
+            <td className="px-3 py-4">{base && costo != null ? <span className={`font-bold ${final < costo ? "text-red-500" : "text-emerald-500"}`}>{money(final - costo, displayCurrency)} c/u</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
             <td className="px-3 py-4 text-xs text-muted">{tarifas.length > 0 ? `${tarifas.length} tarifa${tarifas.length === 1 ? "" : "s"}` : "Sin tarifas"}</td>
             <td className="px-3 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${plan.activo ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-muted"}`}>{plan.activo ? "Activo" : "Inactivo"}</span></td>
             <td className="px-5 py-4"><div className="flex justify-end"><Action onClick={() => onRates(plan)} tone={base ? "green" : "brand"}>{base ? "Tarifas" : "Poner precio"}</Action></div></td>
@@ -707,10 +758,11 @@ function PlansTable({ loading, planes, displayCurrency, trm, onEdit, onRates, on
       return <tr key={plan.id} className="border-t border-line/10 hover:bg-brand/[0.04]">
       <td className="px-5 py-4"><div className="font-black">{plan.nombre_display || plan.nombre}</div><div className="mt-1 max-w-xs text-xs text-muted">{plan.descripcion || (plan.es_producto ? "Servicio de Estudios de Seguridad" : "Sin descripción")}</div></td>
       <td className="px-3 py-4">{hasInternalCost ? <span className="text-muted">{money(internalCost, displayCurrency)}</span> : <span className="text-xs font-semibold text-amber-500">Sin definir</span>}</td>
-      <td className="px-3 py-4">{reference ? <><div className="font-black">{money(unitPrice, displayCurrency)}</div><div className="mt-1 text-xs text-muted">Por {singular(plan)} · {displayCurrency}</div></> : <span className="text-xs font-semibold text-muted">Sin tarifa</span>}</td>
-      <td className="px-3 py-4">{commercialPrice > 0 ? <div className="font-black">{money(commercialPrice, displayCurrency)}</div> : <span className="text-xs font-semibold text-amber-500">Sin precio</span>}{reference && <div className="mt-1 text-xs text-muted">{Number(reference.cantidad).toLocaleString("es-CO")} {plural(plan)} · {displayCurrency}</div>}</td>
+      <td className="px-3 py-4">{reference ? <PrecioConDescuento valor={unitPrice} porcentaje={descuento} currency={displayCurrency} nota={`Por ${singular(plan)} · ${displayCurrency}`} /> : <span className="text-xs font-semibold text-muted">Sin tarifa</span>}</td>
+      <td className="px-3 py-4">{commercialPrice > 0 ? <PrecioConDescuento valor={commercialPrice} porcentaje={descuento} currency={displayCurrency} nota={reference ? `${Number(reference.cantidad).toLocaleString("es-CO")} ${Number(reference.cantidad) === 1 ? singular(plan) : plural(plan)} · ${displayCurrency}` : ""} /> : <span className="text-xs font-semibold text-amber-500">Sin precio</span>}</td>
+      <td className="px-3 py-4">{commercialPrice > 0 ? <DiscountInput label={`Descuento de ${plan.nombre_display || plan.nombre}`} value={descuento} onSave={(valor) => onDiscount(plan, "", valor)} /> : <span className="text-xs text-muted">—</span>}</td>
       <td className="px-3 py-4">{hasInternalCost ? <span className={`font-bold ${margin < 0 ? "text-red-500" : "text-emerald-500"}`}>{money(margin, displayCurrency)}</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
-      <td className="px-3 py-4"><div>{plan.periodicidad_display}</div><div className="text-xs text-muted">{(plan.tarifas || []).length > 0 ? `${plan.tarifas.length} tarifas por volumen` : plan.consultas_incluidas == null ? "Cupo personalizado" : `${plan.consultas_incluidas} ${plural(plan)}`}</div></td>
+      <td className="px-3 py-4"><div>{plan.periodicidad_display}</div><div className="text-xs text-muted">{(plan.tarifas || []).some((r) => Number(r.cantidad) < 500) && (plan.tarifas || []).some((r) => Number(r.cantidad) >= 500) ? `Individual + ${plan.tarifas.filter((r) => Number(r.cantidad) >= 500).length} por volumen` : (plan.tarifas || []).length > 0 ? `${plan.tarifas.length} tarifa${plan.tarifas.length === 1 ? "" : "s"}` : plan.consultas_incluidas == null ? "Cupo personalizado" : `${plan.consultas_incluidas} ${plural(plan)}`}</div></td>
       <td className="px-3 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${plan.activo ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-muted"}`}>{plan.activo ? "Activo" : "Inactivo"}</span></td>
       <td className="px-5 py-4"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Tarifas</Action><Action onClick={() => onEdit(plan)} tone="brand">{plan.es_producto && !(commercialPrice > 0) ? "Poner precio" : "Editar"}</Action>{!plan.es_producto && <Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action>}<Action onClick={() => onDelete(plan)} tone="red">Eliminar</Action></div></td>
     </tr>;})}</tbody>
@@ -759,13 +811,31 @@ function ProposalItemCard({ item, plan, currency, onChange, onQuantity, onAutoPr
   </div>;
 }
 
+function ResumenServicios({ proposal }) {
+  const [abierto, setAbierto] = useState(false);
+  const items = proposal.items || [];
+  const adjuntos = (proposal.adjuntos || []).length;
+  if (!items.length) return <div className="font-semibold">{proposal.plan_nombre}</div>;
+  const visibles = abierto ? items : items.slice(0, 3);
+  return <div className="max-w-[340px]">
+    <div className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.12em] text-muted">{items.length} servicio{items.length === 1 ? "" : "s"}{adjuntos > 0 ? ` · 📎 ${adjuntos}` : ""}</div>
+    <div className="flex flex-wrap gap-1.5">
+      {visibles.map((item) => <span key={item.id} className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs ${item.es_bono ? "border-emerald-400/30 bg-emerald-500/10" : "border-line/20 bg-surface-2/70"}`}>
+        <span className="font-semibold text-content">{item.es_bono ? "🎁 " : ""}{item.plan_nombre}</span>
+        <span className="text-muted">×{Number(item.cantidad).toLocaleString("es-CO")}</span>
+      </span>)}
+      {items.length > 3 && <button type="button" onClick={() => setAbierto((v) => !v)} className="rounded-full border border-brand/30 bg-brand/10 px-2.5 py-1 text-xs font-bold text-brand hover:bg-brand/15">{abierto ? "Ver menos" : `+${items.length - 3} más`}</button>}
+    </div>
+  </div>;
+}
+
 function ProposalsTable({ loading, propuestas, sendingId, onSend, onEdit, onDelete, onStatus }) {
   return <div className="overflow-hidden rounded-[24px] border border-line/15 bg-surface/90 shadow-lg"><div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-left text-sm text-content">
-    <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Propuesta</th><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Plan</th><th className="px-3 py-3">Total</th><th className="px-3 py-3">Vigencia</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
+    <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Propuesta</th><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Incluye</th><th className="px-3 py-3">Total</th><th className="px-3 py-3">Vigencia</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
     <tbody>{loading ? <tr><td colSpan="7" className="px-5 py-12 text-center text-muted">Cargando propuestas…</td></tr> : propuestas.length === 0 ? <tr><td colSpan="7" className="px-5 py-12 text-center text-muted">Aún no hay propuestas comerciales.</td></tr> : propuestas.map((proposal) => <tr key={proposal.id} className="border-t border-line/10 hover:bg-brand/[0.04]">
       <td className="px-5 py-4"><div className="font-black">#{proposal.id}</div><div className="text-xs text-muted">{new Date(proposal.creada).toLocaleDateString("es-CO")}</div></td>
       <td className="px-3 py-4"><div className="font-bold">{proposal.cliente_nombre}</div><div className="text-xs text-muted">{proposal.cliente_email}{(proposal.correos_adicionales || []).length > 0 && ` +${proposal.correos_adicionales.length}`}</div>{proposal.cliente_empresa && <div className="text-xs text-muted">{proposal.cliente_empresa}</div>}</td>
-      <td className="px-3 py-4">{(proposal.items || []).length ? proposal.items.map((item) => <div key={item.id} className="text-xs"><span className="font-semibold text-content">{item.plan_nombre}</span> <span className="text-muted">× {Number(item.cantidad).toLocaleString("es-CO")}</span></div>) : <div className="font-semibold">{proposal.plan_nombre}</div>}{(proposal.adjuntos || []).length > 0 && <div className="mt-1 text-[10px] text-muted">📎 {proposal.adjuntos.length} archivo(s)</div>}</td><td className="px-3 py-4 font-black text-brand">{money(proposal.total, proposal.moneda)}</td><td className="px-3 py-4">{new Date(`${proposal.valida_hasta}T00:00:00`).toLocaleDateString("es-CO")}</td>
+      <td className="px-3 py-4"><ResumenServicios proposal={proposal} /></td><td className="px-3 py-4 font-black text-brand">{money(proposal.total, proposal.moneda)}</td><td className="px-3 py-4">{new Date(`${proposal.valida_hasta}T00:00:00`).toLocaleDateString("es-CO")}</td>
       <td className="px-3 py-4"><select className="rounded-lg border border-line/20 bg-surface px-2 py-1.5 text-xs font-bold text-content" value={proposal.estado} onChange={(e) => onStatus(proposal, e.target.value)}>{ESTADOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{proposal.fecha_envio && <div className="mt-1 text-[10px] text-muted">Enviada {new Date(proposal.fecha_envio).toLocaleString("es-CO")}</div>}<div className={`mt-1 text-[10px] font-semibold ${proposal.vistas ? "text-emerald-600" : "text-muted"}`} title={proposal.vista_ultima ? `Última vez: ${new Date(proposal.vista_ultima).toLocaleString("es-CO")}` : ""}>👁 {proposal.vistas ? `Abierta ${proposal.vistas} ${proposal.vistas === 1 ? "vez" : "veces"}` : "Sin abrir"}</div></td>
       <td className="px-5 py-4"><div className="flex justify-end gap-2"><button onClick={() => onSend(proposal)} disabled={sendingId === proposal.id} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white disabled:opacity-60">{sendingId === proposal.id ? "Enviando…" : proposal.estado === "enviada" ? "Reenviar" : "Enviar"}</button>{proposal.enlace_publico && <a href={`${proposal.enlace_publico}?preview=1`} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-1.5 font-semibold text-violet-600">Ver</a>}<Action onClick={() => onEdit(proposal)} tone="brand">Editar</Action><Action onClick={() => onDelete(proposal)} tone="red">Eliminar</Action></div></td>
     </tr>)}</tbody>
