@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import Toast from "../components/Toast";
+import CentrosCostoPanel from "../components/CentrosCostoPanel";
 
 /**
  * Panel del dueño de la empresa (Perfil.es_admin_organizacion).
@@ -116,10 +117,10 @@ export default function GestionEmpresa() {
 
       {/* Tabs */}
       <div className="flex gap-2 mb-4">
-        {["usuarios", "auditoria"].map((t) => (
+        {["usuarios", "centros", "auditoria"].map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-brand text-white" : "bg-surface-2/60 text-muted hover:text-content"}`}>
-            {t === "usuarios" ? "Usuarios" : "Informe / Auditoría"}
+            {t === "usuarios" ? "Usuarios" : t === "centros" ? "Centros de costos" : "Informe / Auditoría"}
           </button>
         ))}
       </div>
@@ -156,6 +157,8 @@ export default function GestionEmpresa() {
           </div>
         </>
       )}
+
+      {tab === "centros" && <CentrosCostoPanel api={API} headers={authH} onToast={setToast} />}
 
       {tab === "auditoria" && (
         <div className="space-y-5">
