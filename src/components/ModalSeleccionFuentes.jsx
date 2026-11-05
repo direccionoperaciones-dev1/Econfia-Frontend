@@ -7,6 +7,11 @@
  *   onConfirm        {function} — callback al confirmar (recibe array de nombres seleccionados)
  *   title            {string}   — título del modal (ej: "Selecciona las fuentes")
  *   loading          {boolean}  — muestra spinner mientras se cargan fuentes
+ *   seleccionInicial {string[]} — nombres ya marcados al abrir
+ *   limite           {number}   — máximo de fuentes (por defecto 45)
+ *   permitirVacio    {boolean}  — deja confirmar sin ninguna fuente
+ *
+ * onConfirm también recibe, como segundo argumento, las fuentes completas.
  */
 
 import { useState, useEffect } from "react";
@@ -18,6 +23,9 @@ export default function ModalSeleccionFuentes({
   onConfirm,
   title = "Selecciona las fuentes",
   loading = false,
+  seleccionInicial,
+  limite = 45,
+  permitirVacio = false,
 }) {
   const [fuentes, setFuentes] = useState([]);
   const [seleccionadas, setSeleccionadas] = useState([]);
@@ -28,6 +36,7 @@ export default function ModalSeleccionFuentes({
   // Cargar fuentes al abrir modal
   useEffect(() => {
     if (!isOpen) return;
+    if (seleccionInicial) setSeleccionadas(seleccionInicial);
 
     const fetchFuentes = async () => {
       try {
@@ -50,6 +59,7 @@ export default function ModalSeleccionFuentes({
     };
 
     fetchFuentes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- la selección inicial solo se toma al abrir
   }, [isOpen, API_URL]);
 
   // Filtrar fuentes por texto
@@ -64,8 +74,8 @@ export default function ModalSeleccionFuentes({
       if (prev.includes(nombre)) {
         return prev.filter((n) => n !== nombre);
       }
-      // Si ya hay 45 seleccionadas, no agregar más
-      if (prev.length >= 45) {
+      // Si ya se llegó al límite, no agregar más
+      if (prev.length >= limite) {
         return prev;
       }
       return [...prev, nombre];
@@ -82,17 +92,17 @@ export default function ModalSeleccionFuentes({
       setSeleccionadas([]);
     } else {
       const nuevas = filteredFuentes.map((f) => f.nombre);
-      setSeleccionadas(nuevas.slice(0, 45));
+      setSeleccionadas(nuevas.slice(0, limite));
     }
   };
 
   // Confirmar selección
   const handleConfirmar = () => {
-    if (seleccionadas.length === 0) {
+    if (seleccionadas.length === 0 && !permitirVacio) {
       alert("Selecciona al menos una fuente");
       return;
     }
-    if (onConfirm) onConfirm(seleccionadas);
+    if (onConfirm) onConfirm(seleccionadas, fuentes.filter((f) => seleccionadas.includes(f.nombre)));
     handleCloseModal();
   };
 
@@ -162,9 +172,9 @@ export default function ModalSeleccionFuentes({
             <div className="mb-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-brand font-medium">
-                  Fuentes seleccionadas: {seleccionadas.length} / 45
+                  Fuentes seleccionadas: {seleccionadas.length}{Number.isFinite(limite) ? ` / ${limite}` : ""}
                 </span>
-                {seleccionadas.length >= 45 && (
+                {seleccionadas.length >= limite && (
                   <span className="text-xs text-orange-400 font-medium">⚠️ Límite máximo alcanzado</span>
                 )}
               </div>
@@ -181,7 +191,7 @@ export default function ModalSeleccionFuentes({
                 <div className="space-y-2 mb-4 max-h-[40vh] overflow-y-auto">
                   {filteredFuentes.length > 0 ? (
                     filteredFuentes.map((fuente) => {
-                      const isDisabled = seleccionadas.length >= 45 && !seleccionadas.includes(fuente.nombre);
+                      const isDisabled = seleccionadas.length >= limite && !seleccionadas.includes(fuente.nombre);
                       return (
                       <label
                         key={fuente.nombre}
@@ -223,9 +233,9 @@ export default function ModalSeleccionFuentes({
                   </button>
                   <button
                     onClick={handleConfirmar}
-                    disabled={seleccionadas.length === 0 || loading}
+                    disabled={(seleccionadas.length === 0 && !permitirVacio) || loading}
                     className={`flex-1 px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-300 ${
-                      seleccionadas.length === 0 || loading
+                      (seleccionadas.length === 0 && !permitirVacio) || loading
                         ? "bg-white/10 text-white/40 cursor-not-allowed"
                         : "bg-gradient-to-r from-brand to-brand-2 text-white hover:opacity-90 hover:shadow-lg hover:shadow-brand/50"
                     }`}

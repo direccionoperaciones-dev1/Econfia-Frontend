@@ -1643,7 +1643,7 @@ const AdminUsuarios = () => {
           subtitle={`Usuario: ${selectedUser?.username || ""}`}
         >
           <div className="grid max-h-[52vh] grid-cols-2 gap-2 overflow-y-auto pr-1">
-            {planes.map((plan) => {
+            {planes.filter((plan) => !plan.es_producto).map((plan) => {
               const on = selectedPlanes.includes(plan.id);
               return (
                 <button

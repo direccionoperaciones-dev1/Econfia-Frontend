@@ -79,26 +79,30 @@ export default function PropuestaPublica() {
             {data.items.map((item, i) => <article key={i} className="flex flex-col overflow-hidden rounded-3xl border border-violet-300/15 bg-gradient-to-b from-white/[0.07] to-white/[0.02] shadow-2xl shadow-violet-950/40">
               <div className="border-b border-white/10 p-6">
                 <div className="flex items-start justify-between gap-3">
-                  <div><div className="text-[10px] font-bold uppercase tracking-[0.25em] text-violet-300">Plan {i + 1}</div><h3 className="mt-1 text-2xl font-black">{item.plan_nombre}</h3></div>
+                  <div><div className="text-[10px] font-bold uppercase tracking-[0.25em] text-violet-300">{item.es_bono ? "🎁 Bono de regalo" : `${item.etiqueta === "servicio" ? "Servicio" : "Plan"} ${i + 1}`}</div><h3 className="mt-1 text-2xl font-black">{item.plan_nombre}</h3></div>
                   {Number(item.descuento_porcentaje) > 0 && <span className="rounded-full bg-emerald-400/15 px-3 py-1 text-xs font-black text-emerald-300">−{pct(item.descuento_porcentaje)}%</span>}
                 </div>
                 {item.plan_descripcion && <p className="mt-3 text-sm leading-6 text-violet-100/75">{item.plan_descripcion}</p>}
                 <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                  <Chip>🔎 {Number(item.cantidad).toLocaleString("es-CO")} consultas</Chip>
+                  <Chip>🔎 {Number(item.cantidad).toLocaleString("es-CO")} {Number(item.cantidad) === 1 ? (item.unidad_singular || "consulta") : (item.unidad_plural || "consultas")}</Chip>
                   {item.usuarios && <Chip>👥 {Number(item.usuarios).toLocaleString("es-CO")} usuario{item.usuarios === 1 ? "" : "s"}</Chip>}
                   {item.disponibilidad && <Chip>⏱ {item.disponibilidad}</Chip>}
                 </div>
+                {item.fuentes?.length > 0 && <details className="mt-4 text-sm text-violet-100/80">
+                  <summary className="cursor-pointer font-bold text-violet-200">Fuentes incluidas ({item.fuentes.length})</summary>
+                  <div className="mt-2 flex flex-wrap gap-1.5">{item.fuentes.map((nombre, j) => <span key={j} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-xs">{nombre}</span>)}</div>
+                </details>}
               </div>
               {item.beneficios.length > 0 && <ul className="space-y-2.5 p-6">
                 {item.beneficios.map((b, j) => <li key={j} className="flex gap-3 text-sm leading-6 text-violet-50/90"><span className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-emerald-400/20 text-[11px] font-black text-emerald-300">✓</span>{b}</li>)}
               </ul>}
               <div className="mt-auto space-y-1.5 border-t border-white/10 bg-black/20 p-6 text-sm">
-                <Fila k="Precio por consulta" v={money(item.precio_unitario, data.moneda)} />
+                {!item.es_bono && <Fila k={`Precio por ${item.unidad_singular || "consulta"}`} v={money(item.precio_unitario, data.moneda)} />}
                 {item.precio_paquete && <Fila k="Valor del paquete" v={money(item.precio_paquete, data.moneda)} />}
                 {Number(item.descuento_volumen_porcentaje) > 0 && <Fila k="Ahorro por volumen" v={`${pct(item.descuento_volumen_porcentaje)}%`} verde />}
                 {Number(item.descuento_porcentaje) > 0 && <Fila k="Descuento" v={`−${pct(item.descuento_porcentaje)}%`} verde />}
-                {item.precio_consulta_adicional && <Fila k="Consulta adicional" v={money(item.precio_consulta_adicional, data.moneda)} />}
-                <div className="flex items-end justify-between pt-3"><span className="font-bold text-violet-200">Valor del plan</span><span className="text-2xl font-black">{money(item.total, data.moneda)}</span></div>
+                {item.precio_consulta_adicional && <Fila k={item.unidad_singular === "estudio" ? "Estudio adicional" : item.unidad_singular === "prueba" ? "Prueba adicional" : "Consulta adicional"} v={money(item.precio_consulta_adicional, data.moneda)} />}
+                <div className="flex items-end justify-between pt-3"><span className="font-bold text-violet-200">Valor del {item.etiqueta || "plan"}</span><span className={`text-2xl font-black ${item.es_bono ? "text-emerald-300" : ""}`}>{item.es_bono ? "Sin costo" : money(item.total, data.moneda)}</span></div>
               </div>
             </article>)}
           </div>

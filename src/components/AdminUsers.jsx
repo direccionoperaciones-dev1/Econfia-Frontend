@@ -185,7 +185,7 @@ const AdminUsers = () => {
                   <Modal open={!!modalUser} onClose={() => setModalUser(null)}>
                     <h4>Asignar planes a {modalUser?.username}</h4>
                     <div style={{ margin: '12px 0' }}>
-                      {planes.map(plan => (
+                      {planes.filter(plan => !plan.es_producto).map(plan => (
                         <label key={plan.id} style={{ display: 'block', marginBottom: 6 }}>
                           <input
                             type="checkbox"
