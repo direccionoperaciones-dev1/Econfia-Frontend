@@ -142,6 +142,22 @@ describe("armador de paquetes", () => {
     expect(screen.getByText("Todavía no has marcado nada.")).toBeInTheDocument();
   });
 
+  it("muestra el motivo real cuando el servidor rechaza una línea", async () => {
+    preparar();
+    await abrirPropuestas();
+    fireEvent.change(screen.getByLabelText("Nombre del cliente"), { target: { value: "Ana" } });
+    fireEvent.change(screen.getByLabelText("Correo"), { target: { value: "ana@example.com" } });
+    fireEvent.click(casilla("Polígrafo"));
+    const normal = global.fetch.getMockImplementation();
+    global.fetch.mockImplementation(async (url, options = {}) => (
+      options.method === "POST"
+        ? { ok: false, status: 400, json: async () => ({ items: [{}, { producto: ["Ese producto no pertenece."] }] }) }
+        : normal(url, options)
+    ));
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
+    expect(await screen.findByText("Línea 2 · producto: Ese producto no pertenece.")).toBeInTheDocument();
+  });
+
   it("guarda las fuentes escogidas de una línea", async () => {
     const envios = preparar();
     await abrirPropuestas();

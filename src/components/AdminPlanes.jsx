@@ -119,12 +119,34 @@ const convertCurrency = (value, source, target, trm) => {
 const tariffReference = (plan) => (plan.tarifas || [])
   .filter((rate) => rate.activo)
   .sort((a, b) => Number(a.cantidad) - Number(b.cantidad))[0] || null;
+// Los errores de una línea llegan anidados: {items: [{}, {campo: ["mensaje"]}]}.
+const primerMensaje = (valor) => {
+  if (typeof valor === "string") return valor;
+  if (Array.isArray(valor)) {
+    for (let i = 0; i < valor.length; i += 1) {
+      const item = valor[i];
+      if (item && typeof item === "object" && !Array.isArray(item)) {
+        const hallado = Object.entries(item).find(([, v]) => primerMensaje(v));
+        if (hallado) return `Línea ${i + 1} · ${hallado[0]}: ${primerMensaje(hallado[1])}`;
+      } else {
+        const mensaje = primerMensaje(item);
+        if (mensaje) return mensaje;
+      }
+    }
+    return "";
+  }
+  if (valor && typeof valor === "object") {
+    for (const v of Object.values(valor)) {
+      const mensaje = primerMensaje(v);
+      if (mensaje) return mensaje;
+    }
+  }
+  return "";
+};
 const parseError = async (response, fallback) => {
   try {
     const body = await response.json();
-    if (body.detail) return body.detail;
-    const first = Object.values(body || {})[0];
-    return Array.isArray(first) ? first[0] : typeof first === "string" ? first : fallback;
+    return primerMensaje(body?.detail || body) || fallback;
   } catch { return fallback; }
 };
 
