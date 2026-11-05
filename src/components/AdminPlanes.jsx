@@ -565,7 +565,7 @@ export default function AdminPlanes() {
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Field label="Descuento comercial adicional %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={proposalForm.descuento_porcentaje} onChange={(e) => setProposalForm({ ...proposalForm, descuento_porcentaje: e.target.value })} /></Field>
+              <Field label="Descuento a todo el combo %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={proposalForm.descuento_porcentaje} onChange={(e) => setProposalForm({ ...proposalForm, descuento_porcentaje: e.target.value })} /></Field>
               <Field label="Válida hasta"><input className={inputClass} type="date" value={proposalForm.valida_hasta} onChange={(e) => setProposalForm({ ...proposalForm, valida_hasta: e.target.value })} required /></Field>
               <div className="md:col-span-2"><Field label="Observaciones"><textarea className={`${inputClass} min-h-20 resize-y`} value={proposalForm.observaciones} onChange={(e) => setProposalForm({ ...proposalForm, observaciones: e.target.value })} placeholder="Condiciones especiales, alcance o notas para el cliente" /></Field></div>
               <div className="md:col-span-2 lg:col-span-3">
@@ -727,10 +727,11 @@ function ProposalItemCard({ item, plan, currency, onChange, onQuantity, onAutoPr
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
       <div className="min-w-[180px] flex-1"><div className="text-sm font-black text-content">{item.es_bono && "🎁 "}{plan ? nombreLinea(plan, item) : "Sin escoger"}</div>{item.es_bono && <div className="text-xs font-semibold text-emerald-600">Bono de regalo</div>}</div>
       <label className="flex items-center gap-2 text-xs font-bold text-muted">Cantidad<input aria-label={`Cantidad de ${nombreLinea(plan, item)}`} className={`${inputClass} w-24 font-bold`} type="number" min="1" value={item.cantidad} onFocus={seleccionarTodo} onChange={(e) => onQuantity(e.target.value)} required /></label>
+      {!item.es_bono && <label className="flex items-center gap-2 text-xs font-bold text-muted">Descuento<span className="relative"><input aria-label={`Descuento de ${nombreLinea(plan, item)}`} className={`${inputClass} w-20 pr-6 font-bold`} type="number" min="0" max="100" step="0.01" value={item.descuento_porcentaje} onFocus={seleccionarTodo} onChange={(e) => onChange({ descuento_porcentaje: e.target.value })} /><span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted">%</span></span></label>}
       {!item.es_bono && cantidades.length > 1 && <div className="flex flex-wrap gap-1">{cantidades.map((n) => <button key={n} type="button" onClick={() => onQuantity(String(n))} className={`rounded-lg border px-2 py-1 text-xs font-bold ${Number(item.cantidad) === n ? "border-brand/60 bg-brand/15 text-brand" : "border-line/20 text-muted hover:text-content"}`}>{n.toLocaleString("es-CO")}</button>)}</div>}
       <div className="ml-auto text-right">
         <div className={`text-base font-black ${item.es_bono ? "text-emerald-600" : "text-brand"}`}>{item.es_bono ? "Sin costo" : money(itemTotal(item), currency)}</div>
-        {!item.es_bono && <div className="text-[11px] text-muted">{Number(item.cantidad || 0).toLocaleString("es-CO")} {unidad} × {money(item.precio_unitario, currency)}{item.precio_manual ? " · a mano" : ""}</div>}
+        {!item.es_bono && <div className="text-[11px] text-muted">{Number(item.cantidad || 0).toLocaleString("es-CO")} {unidad} × {money(item.precio_unitario, currency)}{Number(item.descuento_porcentaje) > 0 ? ` · −${item.descuento_porcentaje}%` : ""}{item.precio_manual ? " · a mano" : ""}</div>}
       </div>
       <div className="flex gap-2">
         {!item.es_bono && <button type="button" onClick={onGift} className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-600">🎁 Regalar</button>}
@@ -741,7 +742,6 @@ function ProposalItemCard({ item, plan, currency, onChange, onQuantity, onAutoPr
       <summary className="cursor-pointer text-xs font-bold text-muted hover:text-content">Más opciones{fuentes.length > 0 ? ` · ${fuentes.length} fuente${fuentes.length === 1 ? "" : "s"}` : ""}</summary>
       <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         {!item.es_bono && <div><Field label={`Precio por ${singular(plan)} (a mano)`}><MoneyInput value={item.precio_unitario} currency={currency} onChange={(value) => onChange({ precio_unitario: value, precio_manual: true, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" })} required /></Field>{item.precio_manual && <button type="button" onClick={onAutoPrice} className="mt-1 text-xs font-bold text-brand hover:underline">Volver al precio automático</button>}</div>}
-        {!item.es_bono && <Field label="Descuento %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={item.descuento_porcentaje} onChange={(e) => onChange({ descuento_porcentaje: e.target.value })} /></Field>}
         <Field label="Usuarios incluidos"><input className={inputClass} type="number" min="1" placeholder="Sin límite definido" value={item.usuarios} onChange={(e) => onChange({ usuarios: e.target.value })} /></Field>
         <Field label="Disponibilidad"><input className={inputClass} maxLength={160} placeholder="Ej. 24/7 · Lun–Vie 7:00–19:00" value={item.disponibilidad} onChange={(e) => onChange({ disponibilidad: e.target.value })} /></Field>
         <div className="md:col-span-2"><Field label="Descripción para el cliente"><textarea className={`${inputClass} min-h-16 resize-y`} value={item.plan_descripcion} onChange={(e) => onChange({ plan_descripcion: e.target.value })} placeholder="Alcance" /></Field></div>

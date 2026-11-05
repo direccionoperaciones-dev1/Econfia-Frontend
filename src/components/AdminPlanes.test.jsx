@@ -142,6 +142,19 @@ describe("armador de paquetes", () => {
     expect(screen.getByText("Todavía no has marcado nada.")).toBeInTheDocument();
   });
 
+  it("descuenta solo a un producto o a todo el combo", async () => {
+    preparar();
+    await abrirPropuestas();
+    fireEvent.click(casilla("Econfia Credit Report"));
+    fireEvent.click(casilla("Polígrafo"));
+    // 10 % solo a Polígrafo: 30.000 + 90.000.
+    fireEvent.change(screen.getByLabelText("Descuento de Polígrafo"), { target: { value: "10" } });
+    expect(total()).toHaveTextContent("120.000");
+    // Y 50 % a todo el combo encima.
+    fireEvent.change(screen.getByLabelText(/^Descuento a todo el combo/), { target: { value: "50" } });
+    expect(total()).toHaveTextContent("60.000");
+  });
+
   it("muestra el motivo real cuando el servidor rechaza una línea", async () => {
     preparar();
     await abrirPropuestas();
