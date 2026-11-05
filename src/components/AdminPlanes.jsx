@@ -757,7 +757,7 @@ function Cotizador({ plan, producto, descuento, currency, trm, label }) {
 
 function PlansTable({ loading, planes, displayCurrency, trm, onDiscount, onEdit, onRates, onAssign, onDelete }) {
   return <div className="overflow-hidden rounded-[24px] border border-line/15 bg-surface/90 shadow-lg"><div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-sm text-content">
-    <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Plan</th><th className="px-3 py-3">Costo interno</th><th className="px-3 py-3">Valor unitario</th><th className="px-3 py-3">Valor paquete</th><th className="px-3 py-3">Descuento</th><th className="px-3 py-3">Cotizar</th><th className="px-3 py-3">Margen</th><th className="px-3 py-3">Condiciones</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
+    <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Plan</th><th className="px-3 py-3">Costo interno</th><th className="px-3 py-3">Valor unitario</th><th className="px-3 py-3">Valor paquete</th><th className="px-3 py-3">Descuento</th><th className="px-3 py-3">Cotizar</th><th className="px-3 py-3">Margen</th><th className="px-3 py-3">Condiciones</th><th className="px-3 py-3">Estado</th><th className="sticky right-0 z-[1] bg-surface shadow-[-12px_0_16px_-12px_rgba(0,0,0,.45)] bg-surface-2 px-4 py-3 text-right">Acciones</th></tr></thead>
     <tbody>{loading ? <tr><td colSpan="10" className="px-5 py-12 text-center text-muted">Cargando planes…</td></tr> : planes.length === 0 ? <tr><td colSpan="10" className="px-5 py-12 text-center text-muted">Aún no hay planes.</td></tr> : [...planes].sort((a, b) => Number(Boolean(a.es_producto)) - Number(Boolean(b.es_producto))).map((plan) => {
       const reference = tariffReference(plan);
       const commercialPriceBase = reference ? Number(reference.precio_paquete) : Number(plan.precio || 0);
@@ -771,7 +771,7 @@ function PlansTable({ loading, planes, displayCurrency, trm, onDiscount, onEdit,
       if (plan.productos?.length) return <React.Fragment key={plan.id}>
         <tr className="border-t border-line/10 bg-surface-2/40">
           <td colSpan="9" className="px-5 py-3"><span className="font-black">Plan Experian</span><span className="ml-2 text-xs text-muted">Un solo acceso y saldo, con precio por producto.</span></td>
-          <td className="px-5 py-3"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Precios</Action><Action onClick={() => onEdit(plan)} tone="brand">Editar</Action><Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action></div></td>
+          <td className="sticky right-0 z-[1] bg-surface shadow-[-12px_0_16px_-12px_rgba(0,0,0,.45)] px-4 py-3"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Precios</Action><Action onClick={() => onEdit(plan)} tone="brand">Editar</Action><Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action></div></td>
         </tr>
         {plan.productos.map((producto) => {
           const tarifas = tarifasDe(plan, producto.clave);
@@ -790,7 +790,7 @@ function PlansTable({ loading, planes, displayCurrency, trm, onDiscount, onEdit,
             <td className="px-3 py-4">{base && costo != null ? <span className={`font-bold ${final < costo ? "text-red-500" : "text-emerald-500"}`}>{money(final - costo, displayCurrency)} c/u</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
             <td className="px-3 py-4 text-xs text-muted">{tarifas.length > 0 ? `${tarifas.length} tarifa${tarifas.length === 1 ? "" : "s"}` : "Sin tarifas"}</td>
             <td className="px-3 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${plan.activo ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-muted"}`}>{plan.activo ? "Activo" : "Inactivo"}</span></td>
-            <td className="px-5 py-4"><div className="flex justify-end"><Action onClick={() => onRates(plan)} tone={base ? "green" : "brand"}>{base ? "Tarifas" : "Poner precio"}</Action></div></td>
+            <td className="sticky right-0 z-[1] bg-surface shadow-[-12px_0_16px_-12px_rgba(0,0,0,.45)] px-4 py-4"><div className="flex justify-end"><Action onClick={() => onRates(plan)} tone={base ? "green" : "brand"}>{base ? "Tarifas" : "Poner precio"}</Action></div></td>
           </tr>;
         })}
       </React.Fragment>;
@@ -804,7 +804,7 @@ function PlansTable({ loading, planes, displayCurrency, trm, onDiscount, onEdit,
       <td className="px-3 py-4">{hasInternalCost ? <span className={`font-bold ${margin < 0 ? "text-red-500" : "text-emerald-500"}`}>{money(margin, displayCurrency)}</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
       <td className="px-3 py-4"><div>{plan.periodicidad_display}</div><div className="text-xs text-muted">{(plan.tarifas || []).some((r) => Number(r.cantidad) < 500) && (plan.tarifas || []).some((r) => Number(r.cantidad) >= 500) ? `Individual + ${plan.tarifas.filter((r) => Number(r.cantidad) >= 500).length} por volumen` : (plan.tarifas || []).length > 0 ? `${plan.tarifas.length} tarifa${plan.tarifas.length === 1 ? "" : "s"}` : plan.consultas_incluidas == null ? "Cupo personalizado" : `${plan.consultas_incluidas} ${plural(plan)}`}</div></td>
       <td className="px-3 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${plan.activo ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-muted"}`}>{plan.activo ? "Activo" : "Inactivo"}</span></td>
-      <td className="px-5 py-4"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Tarifas</Action><Action onClick={() => onEdit(plan)} tone="brand">{plan.es_producto && !(commercialPrice > 0) ? "Poner precio" : "Editar"}</Action>{!plan.es_producto && <Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action>}<Action onClick={() => onDelete(plan)} tone="red">Eliminar</Action></div></td>
+      <td className="sticky right-0 z-[1] bg-surface shadow-[-12px_0_16px_-12px_rgba(0,0,0,.45)] px-4 py-4"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Tarifas</Action><Action onClick={() => onEdit(plan)} tone="brand">{plan.es_producto && !(commercialPrice > 0) ? "Poner precio" : "Editar"}</Action>{!plan.es_producto && <Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action>}<Action onClick={() => onDelete(plan)} tone="red">Eliminar</Action></div></td>
     </tr>;})}</tbody>
   </table></div></div>;
 }
@@ -889,5 +889,5 @@ function ProposalsTable({ loading, propuestas, sendingId, onSend, onEdit, onDele
 
 function Action({ children, onClick, tone }) {
   const colors = tone === "red" ? "border-red-400/25 bg-red-500/10 text-red-600" : tone === "violet" ? "border-violet-400/25 bg-violet-500/10 text-violet-600" : tone === "green" ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-600" : "border-brand/25 bg-brand/10 text-brand";
-  return <button onClick={onClick} className={`rounded-lg border px-3 py-1.5 font-semibold ${colors}`}>{children}</button>;
+  return <button type="button" onClick={onClick} className={`whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${colors}`}>{children}</button>;
 }
