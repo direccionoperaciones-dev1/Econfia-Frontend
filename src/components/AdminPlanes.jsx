@@ -46,13 +46,13 @@ const newItem = () => ({
   plan: "", tarifa_origen: "", cantidad: "1", precio_unitario: "", precio_paquete: "",
   descuento_volumen_porcentaje: "0", precio_consulta_adicional: "", descuento_porcentaje: "0",
   usuarios: "", disponibilidad: "", beneficios: "", plan_descripcion: "",
-  fuentes: [], es_bono: false, producto: "",
+  fuentes: [], es_bono: false, producto: "", precio_manual: false,
 });
 const newProposal = () => ({
   cliente_nombre: "", cliente_empresa: "", cliente_email: "", correos_adicionales: [],
   moneda: "COP", descuento_porcentaje: "0",
   valida_hasta: defaultExpiry(), observaciones: "",
-  items: [newItem()],
+  items: [],
 });
 const itemSubtotal = (item) => item.es_bono ? 0 : item.precio_paquete === "" ? Number(item.precio_unitario || 0) * Number(item.cantidad || 0) : Number(item.precio_paquete || 0);
 const itemTotal = (item) => itemSubtotal(item) * (1 - Number(item.descuento_porcentaje || 0) / 100);
@@ -70,6 +70,37 @@ const conPaqueteCalculado = (row) => {
   const unitario = Number(row.precio_unitario);
   return cantidad > 0 && unitario > 0 ? { ...row, precio_paquete: String(Math.round(cantidad * unitario * 100) / 100) } : row;
 };
+// Precio automático: tarifa exacta para esa cantidad o, si no hay, el precio unitario del rango que aplica.
+const tarifasDe = (plan, producto) => (plan?.tarifas || [])
+  .filter((r) => r.activo && (!plan.productos?.length || r.producto === producto))
+  .sort((a, b) => Number(a.cantidad) - Number(b.cantidad));
+const precioBase = (plan, producto) => {
+  const tarifas = tarifasDe(plan, producto);
+  if (tarifas.length) return Number(tarifas[0].precio_unitario);
+  return plan?.productos?.length ? 0 : Number(plan?.precio || 0);
+};
+const precioAutomatico = (plan, producto, cantidad, moneda, trm) => {
+  const conv = (valor) => String(Math.round(convertCurrency(valor, plan.moneda, moneda, trm) * 100) / 100);
+  const tarifas = tarifasDe(plan, producto);
+  if (!tarifas.length) return { tarifa_origen: "", precio_unitario: conv(precioBase(plan, producto)), precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" };
+  const qty = Number(cantidad) || 1;
+  const exacta = tarifas.find((r) => Number(r.cantidad) === qty);
+  const aplica = exacta || [...tarifas].reverse().find((r) => Number(r.cantidad) <= qty) || tarifas[0];
+  return {
+    tarifa_origen: exacta ? String(exacta.id) : "",
+    precio_unitario: conv(aplica.precio_unitario),
+    precio_paquete: exacta ? conv(exacta.precio_paquete) : "",
+    descuento_volumen_porcentaje: String(aplica.descuento_porcentaje || 0),
+    precio_consulta_adicional: aplica.precio_consulta_adicional == null ? "" : conv(aplica.precio_consulta_adicional),
+  };
+};
+const GRUPOS_CATALOGO = ["Consultas", "Productos Experian", "Servicios de Estudios de Seguridad"];
+const armarCatalogo = (planes) => planes.filter((plan) => plan.activo).flatMap((plan) => (
+  plan.productos?.length
+    ? plan.productos.map((p) => ({ clave: `${plan.id}:${p.clave}`, plan, producto: p.clave, nombre: p.nombre, grupo: "Productos Experian" }))
+    : [{ clave: `${plan.id}:`, plan, producto: "", nombre: plan.nombre_display || plan.nombre, grupo: plan.es_producto ? "Servicios de Estudios de Seguridad" : "Consultas" }]
+));
+const claveLinea = (item) => `${item.plan}:${item.producto || ""}`;
 const nombreLinea = (plan, item) => plan?.productos?.find((p) => p.clave === item.producto)?.nombre || plan?.nombre_display || plan?.nombre;
 const inputClass = "w-full rounded-xl border border-line/20 bg-surface px-3 py-2.5 text-sm text-content outline-none transition placeholder:text-muted/60 focus:border-brand/60";
 const labelClass = "mb-1.5 block text-[11px] font-bold uppercase tracking-[0.13em] text-muted";
@@ -212,7 +243,9 @@ export default function AdminPlanes() {
       costo_unitario: rate.costo_unitario == null ? "" : String(rate.costo_unitario),
       descuento_porcentaje: String(rate.descuento_porcentaje || 0),
       precio_consulta_adicional: rate.precio_consulta_adicional == null ? "" : String(rate.precio_consulta_adicional),
-    })));
+    })).concat((plan.productos || [])
+      .filter((p) => !(plan.tarifas || []).some((rate) => rate.producto === p.clave))
+      .map((p) => ({ ...emptyRate(), producto: p.clave, cantidad: "1" }))));
     setShowRates(true);
   };
   const updateRate = (index, field, value) => setRateRows((rows) => rows.map((row, rowIndex) => {
@@ -232,7 +265,8 @@ export default function AdminPlanes() {
   );
   const saveRates = async () => {
     setSavingRates(true);
-    const tarifas = rateRows.map((rate) => ({
+    // Una fila sin precio no se guarda: ese producto sigue "Sin precio".
+    const tarifas = rateRows.filter((rate) => Number(rate.precio_unitario) > 0).map((rate) => ({
       producto: rate.producto || "",
       cantidad: Number(rate.cantidad),
       precio_unitario: Number(rate.precio_unitario),
@@ -252,52 +286,38 @@ export default function AdminPlanes() {
   const updateItem = (index, changes) => setProposalForm((current) => ({
     ...current, items: current.items.map((item, i) => i === index ? { ...item, ...changes } : item),
   }));
-  const chooseItemPlan = (index, planId) => {
-    const plan = planes.find((p) => String(p.id) === String(planId));
-    updateItem(index, {
-      plan: planId, producto: "", tarifa_origen: "", cantidad: "1", fuentes: [],
-      precio_unitario: proposalForm.items[index].es_bono ? "0" : plan ? String(Math.round(convertCurrency(plan.precio || 0, plan.moneda, proposalForm.moneda, trm))) : "",
-      precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "",
-      plan_descripcion: plan?.descripcion || "",
-    });
-  };
-  const chooseItemRate = (index, rateId) => {
-    const item = proposalForm.items[index];
-    const plan = planes.find((p) => String(p.id) === String(item.plan));
-    const rate = (plan?.tarifas || []).find((r) => String(r.id) === String(rateId));
-    const conv = (v) => String(convertCurrency(v, plan?.moneda, proposalForm.moneda, trm));
-    updateItem(index, rate ? {
-      tarifa_origen: rateId, cantidad: String(rate.cantidad), producto: rate.producto || item.producto || "",
-      precio_unitario: conv(rate.precio_unitario), precio_paquete: conv(rate.precio_paquete),
-      descuento_volumen_porcentaje: String(rate.descuento_porcentaje || 0),
-      precio_consulta_adicional: rate.precio_consulta_adicional == null ? "" : conv(rate.precio_consulta_adicional),
-    } : { tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" });
-  };
-  // Al escoger producto, el precio arranca en su tarifa de menor cantidad.
-  const chooseItemProduct = (index, producto) => {
-    const item = proposalForm.items[index];
-    const plan = planes.find((p) => String(p.id) === String(item.plan));
-    const base = (plan?.tarifas || []).filter((r) => r.activo && r.producto === producto).sort((a, b) => a.cantidad - b.cantidad)[0];
-    updateItem(index, {
-      producto, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "",
-      ...(base && !item.es_bono ? { precio_unitario: String(Math.round(convertCurrency(base.precio_unitario, plan.moneda, proposalForm.moneda, trm))) } : {}),
-    });
-  };
-  const addItem = (changes = {}) => setProposalForm((current) => {
-    // La primera línea vacía se reutiliza para no dejar una tarjeta sin llenar.
-    const vacia = current.items.length === 1 && !current.items[0].plan && !current.items[0].es_bono;
-    return { ...current, items: [...(vacia ? [] : current.items), { ...newItem(), ...changes }] };
+  const lineaNueva = (plan, producto, cambios = {}) => ({
+    ...newItem(), plan: String(plan.id), producto, plan_descripcion: plan.descripcion || "", ...cambios,
   });
-  const addService = (nombre) => {
-    const plan = activePlans.find((p) => p.nombre === nombre);
-    if (!plan) {
-      const etiqueta = SERVICIOS_SEGURIDAD.find(([value]) => value === nombre)?.[1];
-      setToast({ type: "error", message: `Primero crea «${etiqueta}» en la pestaña Planes, con su precio y disponible para propuestas.` });
+  const toggleCatalogo = (entrada) => setProposalForm((current) => {
+    const seleccionada = current.items.some((item) => claveLinea(item) === entrada.clave);
+    if (seleccionada) return { ...current, items: current.items.filter((item) => claveLinea(item) !== entrada.clave) };
+    const precio = precioAutomatico(entrada.plan, entrada.producto, 1, current.moneda, trm);
+    return { ...current, items: [...current.items, lineaNueva(entrada.plan, entrada.producto, precio)] };
+  });
+  const planDeLinea = (item) => planes.find((p) => String(p.id) === String(item.plan));
+  const changeItemQuantity = (index, cantidad) => {
+    const item = proposalForm.items[index];
+    const plan = planDeLinea(item);
+    if (item.es_bono || item.precio_manual || !plan) {
+      updateItem(index, { cantidad, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" });
       return;
     }
-    addItem({
-      plan: String(plan.id), plan_descripcion: plan.descripcion || "",
-      precio_unitario: String(Math.round(convertCurrency(plan.precio || 0, plan.moneda, proposalForm.moneda, trm))),
+    updateItem(index, { cantidad, ...precioAutomatico(plan, item.producto, cantidad, proposalForm.moneda, trm) });
+  };
+  const restablecerPrecio = (index) => {
+    const item = proposalForm.items[index];
+    const plan = planDeLinea(item);
+    if (plan) updateItem(index, { precio_manual: false, ...precioAutomatico(plan, item.producto, item.cantidad, proposalForm.moneda, trm) });
+  };
+  const addGift = (index) => {
+    const item = proposalForm.items[index];
+    const plan = planDeLinea(item);
+    if (!plan) return;
+    setProposalForm((current) => {
+      const items = [...current.items];
+      items.splice(index + 1, 0, lineaNueva(plan, item.producto, { es_bono: true, precio_unitario: "0" }));
+      return { ...current, items };
     });
   };
   const removeItem = (index) => setProposalForm((current) => ({ ...current, items: current.items.filter((_, i) => i !== index) }));
@@ -330,7 +350,7 @@ export default function AdminPlanes() {
   };
   const saveProposal = async (event) => {
     event.preventDefault();
-    if (proposalForm.items.some((item) => !item.plan)) { setToast({ type: "error", message: "Selecciona el plan de cada línea." }); return; }
+    if (proposalForm.items.length === 0) { setToast({ type: "error", message: "Marca al menos un producto." }); return; }
     setSaving(true);
     const numberOrNull = (v) => v === "" || v == null ? null : Number(v);
     const payload = {
@@ -381,13 +401,14 @@ export default function AdminPlanes() {
       descuento_porcentaje: str(item.descuento_porcentaje || 0), usuarios: str(item.usuarios),
       disponibilidad: item.disponibilidad || "", beneficios: item.beneficios || "", plan_descripcion: item.plan_descripcion || "",
       fuentes: item.fuentes_detalle || [], es_bono: Boolean(item.es_bono),
+      precio_manual: !item.tarifa_origen,
     }));
     setProposalForm({
       cliente_nombre: proposal.cliente_nombre, cliente_empresa: proposal.cliente_empresa || "",
       cliente_email: proposal.cliente_email, moneda: proposal.moneda || "COP",
       correos_adicionales: proposal.correos_adicionales || [],
       descuento_porcentaje: String(proposal.descuento_porcentaje), valida_hasta: proposal.valida_hasta,
-      observaciones: proposal.observaciones || "", items: items.length ? items : [newItem()],
+      observaciones: proposal.observaciones || "", items,
     });
     setProposalFiles([]); setExistingFiles(proposal.adjuntos || []);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -410,7 +431,7 @@ export default function AdminPlanes() {
     catch (error) { setToast({ type: "error", message: error.message }); }
   };
 
-  const activePlans = planes.filter((plan) => plan.activo);
+  const catalogo = armarCatalogo(planes);
   const proposalSubtotal = proposalForm.items.reduce((sum, item) => sum + itemTotal(item), 0);
   const proposalTotal = proposalSubtotal * (1 - Number(proposalForm.descuento_porcentaje || 0) / 100);
 
@@ -475,19 +496,41 @@ export default function AdminPlanes() {
               <span className="ml-2 text-xs text-muted">La propuesta llega a todos los correos.</span>
             </div>
 
-            <div className="mt-6 flex flex-wrap items-center justify-between gap-2">
-              <div><div className="text-sm font-black text-content">Arma el paquete del cliente</div><div className="text-xs text-muted">Combina consultas con las fuentes que quiera, servicios de seguridad y bonos. El acceso a la plataforma se sigue activando a mano.</div></div>
-              <div className="flex flex-wrap gap-2">
-                {[["+ Consultas", () => addItem()], ["+ Estudio de seguridad", () => addService("estudio-seguridad")], ["+ Polígrafo", () => addService("poligrafo")], ["🎁 + Bono", () => addItem({ es_bono: true, precio_unitario: "0" })]].map(([label, onClick]) => <button key={label} type="button" onClick={onClick} disabled={proposalForm.items.length >= 20} className="rounded-xl border border-brand/25 bg-brand/10 px-4 py-2 text-sm font-black text-brand transition hover:bg-brand/15 disabled:opacity-50">{label}</button>)}
+            <div className="mt-6">
+              <div className="text-sm font-black text-content">1. Marca lo que quiere el cliente</div>
+              <div className="text-xs text-muted">El precio sale de cada producto y el total se suma solo. El acceso a la plataforma se sigue activando a mano.</div>
+              <div className="mt-3 space-y-4">
+                {GRUPOS_CATALOGO.map((grupo) => {
+                  const entradas = catalogo.filter((entrada) => entrada.grupo === grupo);
+                  if (!entradas.length) return null;
+                  return <div key={grupo}>
+                    <div className={labelClass}>{grupo}</div>
+                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      {entradas.map((entrada) => {
+                        const marcada = proposalForm.items.some((item) => claveLinea(item) === entrada.clave);
+                        const base = precioBase(entrada.plan, entrada.producto);
+                        const sinPrecio = base <= 0;
+                        return <label key={entrada.clave} className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition ${marcada ? "border-brand/60 bg-brand/10" : "border-line/15 bg-surface hover:border-brand/30"} ${sinPrecio && !marcada ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}>
+                          <input type="checkbox" className="h-4 w-4 shrink-0 accent-brand" checked={marcada} disabled={sinPrecio && !marcada} onChange={() => toggleCatalogo(entrada)} />
+                          <span className="min-w-0 flex-1"><span className="block truncate text-sm font-bold text-content">{entrada.nombre}</span><span className={`block text-xs ${sinPrecio ? "font-semibold text-amber-500" : "text-muted"}`}>{sinPrecio ? "Sin precio: ponlo en la pestaña Planes" : `${money(convertCurrency(base, entrada.plan.moneda, proposalForm.moneda, trm), proposalForm.moneda)} por ${singular(entrada.plan)}`}</span></span>
+                        </label>;
+                      })}
+                    </div>
+                  </div>;
+                })}
               </div>
             </div>
-            <div className="mt-3 space-y-3">
-              {proposalForm.items.map((item, index) => <ProposalItemCard key={index} index={index} item={item} canRemove={proposalForm.items.length > 1} plans={activePlans} allPlans={planes} currency={proposalForm.moneda} trm={trm} onChange={(changes) => updateItem(index, changes)} onPlan={(planId) => chooseItemPlan(index, planId)} onProduct={(producto) => chooseItemProduct(index, producto)} onRate={(rateId) => chooseItemRate(index, rateId)} onRemove={() => removeItem(index)} />)}
-            </div>
+            {proposalForm.items.length > 0 && <div className="mt-6">
+              <div className="text-sm font-black text-content">2. Pon la cantidad</div>
+              <div className="mt-3 space-y-2">
+                {proposalForm.items.map((item, index) => <ProposalItemCard key={`${claveLinea(item)}-${item.es_bono ? "b" : "p"}-${index}`} item={item} plan={planDeLinea(item)} currency={proposalForm.moneda} onChange={(changes) => updateItem(index, changes)} onQuantity={(cantidad) => changeItemQuantity(index, cantidad)} onAutoPrice={() => restablecerPrecio(index)} onGift={() => addGift(index)} onRemove={() => removeItem(index)} />)}
+              </div>
+            </div>}
 
             <div className="mt-4 rounded-2xl border border-line/15 bg-surface-2/40 p-4">
               <div className="mb-2 text-[10px] font-bold uppercase tracking-[0.15em] text-muted">Resumen del paquete</div>
               <ul className="divide-y divide-line/10 text-sm text-content">
+                {proposalForm.items.length === 0 && <li className="py-2 text-muted">Todavía no has marcado nada.</li>}
                 {proposalForm.items.map((item, index) => {
                   const plan = planes.find((p) => String(p.id) === String(item.plan));
                   const nFuentes = (item.fuentes || []).length;
@@ -608,7 +651,7 @@ function MoneyInput({ value, onChange, currency = "COP", className = "", placeho
 function PlansTable({ loading, planes, displayCurrency, trm, onEdit, onRates, onAssign, onDelete }) {
   return <div className="overflow-hidden rounded-[24px] border border-line/15 bg-surface/90 shadow-lg"><div className="overflow-x-auto"><table className="w-full min-w-[1120px] text-left text-sm text-content">
     <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Plan</th><th className="px-3 py-3">Costo interno</th><th className="px-3 py-3">Valor unitario</th><th className="px-3 py-3">Valor paquete</th><th className="px-3 py-3">Margen</th><th className="px-3 py-3">Condiciones</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
-    <tbody>{loading ? <tr><td colSpan="8" className="px-5 py-12 text-center text-muted">Cargando planes…</td></tr> : planes.length === 0 ? <tr><td colSpan="8" className="px-5 py-12 text-center text-muted">Aún no hay planes.</td></tr> : planes.map((plan) => {
+    <tbody>{loading ? <tr><td colSpan="8" className="px-5 py-12 text-center text-muted">Cargando planes…</td></tr> : planes.length === 0 ? <tr><td colSpan="8" className="px-5 py-12 text-center text-muted">Aún no hay planes.</td></tr> : [...planes].sort((a, b) => Number(Boolean(a.es_producto)) - Number(Boolean(b.es_producto))).map((plan) => {
       const reference = tariffReference(plan);
       const commercialPriceBase = reference ? Number(reference.precio_paquete) : Number(plan.precio || 0);
       const internalCostBase = Number(plan.costo || 0);
@@ -617,50 +660,80 @@ function PlansTable({ loading, planes, displayCurrency, trm, onEdit, onRates, on
       const internalCost = convertCurrency(internalCostBase, plan.moneda, displayCurrency, trm);
       const hasInternalCost = internalCost > 0;
       const margin = commercialPrice - internalCost;
+      if (plan.productos?.length) return <React.Fragment key={plan.id}>
+        <tr className="border-t border-line/10 bg-surface-2/40">
+          <td colSpan="7" className="px-5 py-3"><span className="font-black">Plan Experian</span><span className="ml-2 text-xs text-muted">Un solo acceso y saldo, con precio por producto.</span></td>
+          <td className="px-5 py-3"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Precios</Action><Action onClick={() => onEdit(plan)} tone="brand">Editar</Action><Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action></div></td>
+        </tr>
+        {plan.productos.map((producto) => {
+          const tarifas = tarifasDe(plan, producto.clave);
+          const base = tarifas[0];
+          const unitario = base ? convertCurrency(base.precio_unitario, plan.moneda, displayCurrency, trm) : 0;
+          const costo = base?.costo_unitario != null ? convertCurrency(base.costo_unitario, plan.moneda, displayCurrency, trm) : null;
+          return <tr key={producto.clave} className="border-t border-line/10 hover:bg-brand/[0.04]">
+            <td className="py-4 pl-9 pr-5 font-black">{producto.nombre}</td>
+            <td className="px-3 py-4">{costo != null ? <span className="text-muted">{money(costo, displayCurrency)}</span> : <span className="text-xs font-semibold text-amber-500">Sin definir</span>}</td>
+            <td className="px-3 py-4">{base ? <><div className="font-black">{money(unitario, displayCurrency)}</div><div className="mt-1 text-xs text-muted">Por consulta · {displayCurrency}</div></> : <span className="text-xs font-semibold text-amber-500">Sin precio</span>}</td>
+            <td className="px-3 py-4">{base ? <div className="font-black">{money(convertCurrency(base.precio_paquete, plan.moneda, displayCurrency, trm), displayCurrency)}</div> : <span className="text-xs text-muted">—</span>}{base && <div className="mt-1 text-xs text-muted">{Number(base.cantidad).toLocaleString("es-CO")} consultas · {displayCurrency}</div>}</td>
+            <td className="px-3 py-4">{base && costo != null ? <span className={`font-bold ${unitario < costo ? "text-red-500" : "text-emerald-500"}`}>{money(unitario - costo, displayCurrency)} c/u</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
+            <td className="px-3 py-4 text-xs text-muted">{tarifas.length > 0 ? `${tarifas.length} tarifa${tarifas.length === 1 ? "" : "s"}` : "Sin tarifas"}</td>
+            <td className="px-3 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${plan.activo ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-muted"}`}>{plan.activo ? "Activo" : "Inactivo"}</span></td>
+            <td className="px-5 py-4"><div className="flex justify-end"><Action onClick={() => onRates(plan)} tone={base ? "green" : "brand"}>{base ? "Tarifas" : "Poner precio"}</Action></div></td>
+          </tr>;
+        })}
+      </React.Fragment>;
       return <tr key={plan.id} className="border-t border-line/10 hover:bg-brand/[0.04]">
-      <td className="px-5 py-4"><div className="font-black">{plan.nombre_display || plan.nombre}</div><div className="mt-1 max-w-xs text-xs text-muted">{plan.descripcion || "Sin descripción"}</div></td>
+      <td className="px-5 py-4"><div className="font-black">{plan.nombre_display || plan.nombre}</div><div className="mt-1 max-w-xs text-xs text-muted">{plan.descripcion || (plan.es_producto ? "Servicio de Estudios de Seguridad" : "Sin descripción")}</div></td>
       <td className="px-3 py-4">{hasInternalCost ? <span className="text-muted">{money(internalCost, displayCurrency)}</span> : <span className="text-xs font-semibold text-amber-500">Sin definir</span>}</td>
       <td className="px-3 py-4">{reference ? <><div className="font-black">{money(unitPrice, displayCurrency)}</div><div className="mt-1 text-xs text-muted">Por {singular(plan)} · {displayCurrency}</div></> : <span className="text-xs font-semibold text-muted">Sin tarifa</span>}</td>
-      <td className="px-3 py-4"><div className="font-black">{money(commercialPrice, displayCurrency)}</div>{reference && <div className="mt-1 text-xs text-muted">{Number(reference.cantidad).toLocaleString("es-CO")} {plural(plan)} · {displayCurrency}</div>}</td>
+      <td className="px-3 py-4">{commercialPrice > 0 ? <div className="font-black">{money(commercialPrice, displayCurrency)}</div> : <span className="text-xs font-semibold text-amber-500">Sin precio</span>}{reference && <div className="mt-1 text-xs text-muted">{Number(reference.cantidad).toLocaleString("es-CO")} {plural(plan)} · {displayCurrency}</div>}</td>
       <td className="px-3 py-4">{hasInternalCost ? <span className={`font-bold ${margin < 0 ? "text-red-500" : "text-emerald-500"}`}>{money(margin, displayCurrency)}</span> : <span className="text-xs font-semibold text-muted">Pendiente</span>}</td>
       <td className="px-3 py-4"><div>{plan.periodicidad_display}</div><div className="text-xs text-muted">{(plan.tarifas || []).length > 0 ? `${plan.tarifas.length} tarifas por volumen` : plan.consultas_incluidas == null ? "Cupo personalizado" : `${plan.consultas_incluidas} ${plural(plan)}`}</div></td>
       <td className="px-3 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${plan.activo ? "bg-emerald-500/10 text-emerald-600" : "bg-slate-500/10 text-muted"}`}>{plan.activo ? "Activo" : "Inactivo"}</span></td>
-      <td className="px-5 py-4"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Tarifas</Action><Action onClick={() => onEdit(plan)} tone="brand">Editar</Action>{!plan.es_producto && <Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action>}<Action onClick={() => onDelete(plan)} tone="red">Eliminar</Action></div></td>
+      <td className="px-5 py-4"><div className="flex justify-end gap-2"><Action onClick={() => onRates(plan)} tone="green">Tarifas</Action><Action onClick={() => onEdit(plan)} tone="brand">{plan.es_producto && !(commercialPrice > 0) ? "Poner precio" : "Editar"}</Action>{!plan.es_producto && <Action onClick={() => onAssign(plan)} tone="violet">Asignar</Action>}<Action onClick={() => onDelete(plan)} tone="red">Eliminar</Action></div></td>
     </tr>;})}</tbody>
   </table></div></div>;
 }
 
-function ProposalItemCard({ index, item, canRemove, plans, allPlans, currency, trm, onChange, onPlan, onProduct, onRate, onRemove }) {
-  const plan = allPlans.find((p) => String(p.id) === String(item.plan));
-  const resetRate = { tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" };
+function ProposalItemCard({ item, plan, currency, onChange, onQuantity, onAutoPrice, onGift, onRemove }) {
   const [pickingSources, setPickingSources] = useState(false);
   const fuentes = item.fuentes || [];
-  return <div className={`rounded-2xl border p-4 ${item.es_bono ? "border-emerald-400/30 bg-emerald-500/5" : "border-line/15 bg-surface-2/40"}`}>
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <div className="flex items-center gap-2"><span className="grid h-7 w-7 place-items-center rounded-lg bg-brand text-xs font-black text-white">{index + 1}</span><span className="text-sm font-black text-content">{plan ? nombreLinea(plan, item) : item.es_bono ? "Nuevo bono" : "Nueva línea"}</span>{item.es_bono && <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-xs font-bold text-emerald-600">🎁 Bono de regalo</span>}</div>
-      <div className="flex items-center gap-3"><span className={`text-sm font-black ${item.es_bono ? "text-emerald-600" : "text-brand"}`}>{item.es_bono ? "Sin costo" : money(itemTotal(item), currency)}</span>{canRemove && <button type="button" onClick={onRemove} className="rounded-lg border border-red-400/25 bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-600">Quitar</button>}</div>
-    </div>
-    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-      <Field label="Plan o servicio"><select className={inputClass} value={item.plan} onChange={(e) => onPlan(e.target.value)} required><option value="">Selecciona uno</option>{plans.map((p) => <option key={p.id} value={p.id}>{p.nombre_display || p.nombre}</option>)}</select></Field>
-      {plan?.productos?.length > 0 && <Field label="Producto"><select className={inputClass} value={item.producto} onChange={(e) => onProduct(e.target.value)} required><option value="">Selecciona un producto</option>{plan.productos.map((p) => <option key={p.clave} value={p.clave}>{p.nombre}</option>)}</select></Field>}
-      {!item.es_bono && <Field label="Tarifa por volumen"><select className={inputClass} value={item.tarifa_origen} onChange={(e) => onRate(e.target.value)} disabled={!plan}><option value="">Precio personalizado</option>{(plan?.tarifas || []).filter((r) => r.activo && (!plan.productos?.length || r.producto === item.producto)).map((r) => <option key={r.id} value={r.id}>{r.cantidad.toLocaleString("es-CO")} {plural(plan)} · {money(convertCurrency(r.precio_paquete, plan.moneda, currency, trm), currency)}</option>)}</select></Field>}
-      <Field label={`Cantidad de ${plural(plan)}`}><input className={inputClass} type="number" min="1" value={item.cantidad} onChange={(e) => onChange({ cantidad: e.target.value, ...resetRate })} required /></Field>
-      {!item.es_bono && <Field label={`Precio por ${singular(plan)}`}><MoneyInput value={item.precio_unitario} currency={currency} onChange={(value) => onChange({ precio_unitario: value, ...resetRate })} required /></Field>}
-      {!item.es_bono && <Field label="Descuento %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={item.descuento_porcentaje} onChange={(e) => onChange({ descuento_porcentaje: e.target.value })} /></Field>}
-      <Field label="Usuarios incluidos"><input className={inputClass} type="number" min="1" placeholder="Sin límite definido" value={item.usuarios} onChange={(e) => onChange({ usuarios: e.target.value })} /></Field>
-      <div className="md:col-span-2"><Field label="Disponibilidad"><input className={inputClass} maxLength={160} placeholder="Ej. 24/7 · Lun–Vie 7:00–19:00 · Soporte en 2 h" value={item.disponibilidad} onChange={(e) => onChange({ disponibilidad: e.target.value })} /></Field></div>
-      <div className="md:col-span-2"><Field label="Descripción para el cliente"><textarea className={`${inputClass} min-h-16 resize-y`} value={item.plan_descripcion} onChange={(e) => onChange({ plan_descripcion: e.target.value })} placeholder="Alcance del plan" /></Field></div>
-      <div className="md:col-span-2"><Field label="Beneficios (uno por línea)"><textarea className={`${inputClass} min-h-16 resize-y`} value={item.beneficios} onChange={(e) => onChange({ beneficios: e.target.value })} placeholder={"Resultados en menos de 2 minutos\nInforme PDF descargable\nSoporte prioritario"} /></Field></div>
-    </div>
-    {plan && !plan.es_producto && <div className="mt-3 rounded-xl border border-line/15 bg-surface/60 p-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-bold text-content">{fuentes.length > 0 ? `${fuentes.length} fuente${fuentes.length === 1 ? "" : "s"} incluida${fuentes.length === 1 ? "" : "s"}` : "Sin selección de fuentes"}<span className="ml-2 text-xs font-normal text-muted">Opcional: lo que verá el cliente en la propuesta.</span></div>
-        <div className="flex gap-3">{fuentes.length > 0 && <button type="button" onClick={() => onChange({ fuentes: [] })} className="text-xs font-bold text-muted hover:text-content">Quitar todas</button>}<button type="button" onClick={() => setPickingSources(true)} className="rounded-lg border border-brand/25 bg-brand/10 px-3 py-1.5 text-xs font-black text-brand hover:bg-brand/15">{fuentes.length > 0 ? "Cambiar fuentes" : "Escoger fuentes"}</button></div>
+  const cantidades = tarifasDe(plan, item.producto).map((r) => Number(r.cantidad));
+  const unidad = Number(item.cantidad) === 1 ? singular(plan) : plural(plan);
+  const seleccionarTodo = (e) => e.target.select();
+  return <div className={`rounded-2xl border p-3 ${item.es_bono ? "border-emerald-400/30 bg-emerald-500/5" : "border-line/15 bg-surface-2/40"}`}>
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="min-w-[180px] flex-1"><div className="text-sm font-black text-content">{item.es_bono && "🎁 "}{plan ? nombreLinea(plan, item) : "Sin escoger"}</div>{item.es_bono && <div className="text-xs font-semibold text-emerald-600">Bono de regalo</div>}</div>
+      <label className="flex items-center gap-2 text-xs font-bold text-muted">Cantidad<input aria-label={`Cantidad de ${nombreLinea(plan, item)}`} className={`${inputClass} w-24 font-bold`} type="number" min="1" value={item.cantidad} onFocus={seleccionarTodo} onChange={(e) => onQuantity(e.target.value)} required /></label>
+      {!item.es_bono && cantidades.length > 1 && <div className="flex flex-wrap gap-1">{cantidades.map((n) => <button key={n} type="button" onClick={() => onQuantity(String(n))} className={`rounded-lg border px-2 py-1 text-xs font-bold ${Number(item.cantidad) === n ? "border-brand/60 bg-brand/15 text-brand" : "border-line/20 text-muted hover:text-content"}`}>{n.toLocaleString("es-CO")}</button>)}</div>}
+      <div className="ml-auto text-right">
+        <div className={`text-base font-black ${item.es_bono ? "text-emerald-600" : "text-brand"}`}>{item.es_bono ? "Sin costo" : money(itemTotal(item), currency)}</div>
+        {!item.es_bono && <div className="text-[11px] text-muted">{Number(item.cantidad || 0).toLocaleString("es-CO")} {unidad} × {money(item.precio_unitario, currency)}{item.precio_manual ? " · a mano" : ""}</div>}
       </div>
-      {fuentes.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{fuentes.slice(0, 12).map((f) => <span key={f.clave} className="rounded-full border border-line/20 bg-surface-2/70 px-2.5 py-0.5 text-xs text-content">{f.nombre}</span>)}{fuentes.length > 12 && <span className="px-1 py-0.5 text-xs font-bold text-muted">+{fuentes.length - 12} más</span>}</div>}
-    </div>}
+      <div className="flex gap-2">
+        {!item.es_bono && <button type="button" onClick={onGift} className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-bold text-emerald-600">🎁 Regalar</button>}
+        <button type="button" onClick={onRemove} className="rounded-lg border border-red-400/25 bg-red-500/10 px-2.5 py-1 text-xs font-bold text-red-600">Quitar</button>
+      </div>
+    </div>
+    <details className="mt-2">
+      <summary className="cursor-pointer text-xs font-bold text-muted hover:text-content">Más opciones{fuentes.length > 0 ? ` · ${fuentes.length} fuente${fuentes.length === 1 ? "" : "s"}` : ""}</summary>
+      <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        {!item.es_bono && <div><Field label={`Precio por ${singular(plan)} (a mano)`}><MoneyInput value={item.precio_unitario} currency={currency} onChange={(value) => onChange({ precio_unitario: value, precio_manual: true, tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" })} required /></Field>{item.precio_manual && <button type="button" onClick={onAutoPrice} className="mt-1 text-xs font-bold text-brand hover:underline">Volver al precio automático</button>}</div>}
+        {!item.es_bono && <Field label="Descuento %"><input className={inputClass} type="number" min="0" max="100" step="0.01" value={item.descuento_porcentaje} onChange={(e) => onChange({ descuento_porcentaje: e.target.value })} /></Field>}
+        <Field label="Usuarios incluidos"><input className={inputClass} type="number" min="1" placeholder="Sin límite definido" value={item.usuarios} onChange={(e) => onChange({ usuarios: e.target.value })} /></Field>
+        <Field label="Disponibilidad"><input className={inputClass} maxLength={160} placeholder="Ej. 24/7 · Lun–Vie 7:00–19:00" value={item.disponibilidad} onChange={(e) => onChange({ disponibilidad: e.target.value })} /></Field>
+        <div className="md:col-span-2"><Field label="Descripción para el cliente"><textarea className={`${inputClass} min-h-16 resize-y`} value={item.plan_descripcion} onChange={(e) => onChange({ plan_descripcion: e.target.value })} placeholder="Alcance" /></Field></div>
+        <div className="md:col-span-2"><Field label="Beneficios (uno por línea)"><textarea className={`${inputClass} min-h-16 resize-y`} value={item.beneficios} onChange={(e) => onChange({ beneficios: e.target.value })} placeholder={"Resultados en menos de 2 minutos\nInforme PDF descargable"} /></Field></div>
+      </div>
+      {plan && !plan.es_producto && <div className="mt-3 rounded-xl border border-line/15 bg-surface/60 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-sm font-bold text-content">{fuentes.length > 0 ? `${fuentes.length} fuente${fuentes.length === 1 ? "" : "s"} incluida${fuentes.length === 1 ? "" : "s"}` : "Sin selección de fuentes"}<span className="ml-2 text-xs font-normal text-muted">Opcional: lo que verá el cliente en la propuesta.</span></div>
+          <div className="flex gap-3">{fuentes.length > 0 && <button type="button" onClick={() => onChange({ fuentes: [] })} className="text-xs font-bold text-muted hover:text-content">Quitar todas</button>}<button type="button" onClick={() => setPickingSources(true)} className="rounded-lg border border-brand/25 bg-brand/10 px-3 py-1.5 text-xs font-black text-brand hover:bg-brand/15">{fuentes.length > 0 ? "Cambiar fuentes" : "Escoger fuentes"}</button></div>
+        </div>
+        {fuentes.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{fuentes.slice(0, 12).map((f) => <span key={f.clave} className="rounded-full border border-line/20 bg-surface-2/70 px-2.5 py-0.5 text-xs text-content">{f.nombre}</span>)}{fuentes.length > 12 && <span className="px-1 py-0.5 text-xs font-bold text-muted">+{fuentes.length - 12} más</span>}</div>}
+      </div>}
+    </details>
     <ModalSeleccionFuentes isOpen={pickingSources} onClose={() => setPickingSources(false)} title={`Fuentes para ${plan?.nombre_display || "esta línea"}`} seleccionInicial={fuentes.map((f) => f.clave)} limite={Infinity} permitirVacio onConfirm={(_, completas) => { onChange({ fuentes: completas.map((f) => ({ clave: f.nombre, nombre: f.nombre_pila || f.nombre })) }); setPickingSources(false); }} />
-    {(Number(item.descuento_volumen_porcentaje) > 0 || item.precio_consulta_adicional !== "") && <div className="mt-2 text-xs text-muted">{Number(item.descuento_volumen_porcentaje) > 0 && <span className="font-semibold text-emerald-600">Incluye {item.descuento_volumen_porcentaje}% de ahorro por volumen. </span>}{item.precio_consulta_adicional !== "" && <span>{capitalizar(singular(plan))} adicional: {money(item.precio_consulta_adicional, currency)}</span>}</div>}
   </div>;
 }
 

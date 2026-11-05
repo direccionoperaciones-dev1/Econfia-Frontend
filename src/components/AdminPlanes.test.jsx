@@ -10,10 +10,24 @@ const plan = (id, nombre, nombre_display, precio, extra = {}) => ({
   periodicidad: "mensual", periodicidad_display: "Mensual", tarifas: [], consultas_incluidas: null,
   es_producto: false, unidad_singular: "consulta", unidad_plural: "consultas", ...extra,
 });
-const PLANES = [
-  plan(1, "econfiafast", "EconfiaFast", 5000),
-  plan(2, "poligrafo", "Polígrafo", 100000, { es_producto: true, unidad_singular: "prueba", unidad_plural: "pruebas" }),
-];
+const tarifa = (id, producto, cantidad, unitario, paquete) => ({
+  id, producto, cantidad, precio_unitario: String(unitario), precio_paquete: String(paquete),
+  descuento_porcentaje: "0", precio_consulta_adicional: null, activo: true,
+});
+const FAST = plan(1, "econfiafast", "EconfiaFast", 0, {
+  tarifas: [tarifa(1, "", 1, 5000, 5000), tarifa(2, "", 500, 4000, 2000000)],
+});
+const POLIGRAFO = plan(2, "poligrafo", "Polígrafo", 100000, { es_producto: true, unidad_singular: "prueba", unidad_plural: "pruebas" });
+const ESTUDIO = plan(4, "estudio-seguridad", "Estudio de seguridad", 0, { es_producto: true, unidad_singular: "estudio", unidad_plural: "estudios" });
+const EXPERIAN = plan(3, "experian", "Econfia Adjudicator", 0, {
+  productos: [
+    { clave: "adjudicator", nombre: "Econfia Adjudicator" },
+    { clave: "credit-report", nombre: "Econfia Credit Report" },
+    { clave: "contact-search", nombre: "Econfia Contact Search" },
+  ],
+  tarifas: [tarifa(7, "credit-report", 1, 30000, 30000), tarifa(8, "adjudicator", 1, 27000, 27000)],
+});
+const PLANES = [FAST, POLIGRAFO, ESTUDIO, EXPERIAN];
 const FUENTES = [{ nombre: "ofac", nombre_pila: "Lista OFAC" }, { nombre: "rues", nombre_pila: "" }];
 
 const respuesta = (data) => ({ ok: true, status: 200, json: async () => data, text: async () => JSON.stringify(data) });
@@ -36,91 +50,110 @@ function preparar(planes = PLANES) {
 async function abrirPropuestas() {
   render(<AdminPlanes />);
   fireEvent.click(await screen.findByRole("button", { name: /^Propuestas/ }));
-  await screen.findByText("Arma el paquete del cliente");
+  await screen.findByText("1. Marca lo que quiere el cliente");
 }
 
 const resumen = () => screen.getByText("Resumen del paquete").parentElement;
+const total = () => screen.getByText("Total propuesto").parentElement;
+const casilla = (nombre) => screen.getByRole("checkbox", { name: new RegExp(`^${nombre}`) });
 
-const EXPERIAN = plan(3, "experian", "Econfia Adjudicator", 0, {
-  productos: [
-    { clave: "adjudicator", nombre: "Econfia Adjudicator" },
-    { clave: "credit-report", nombre: "Econfia Credit Report" },
-    { clave: "contact-search", nombre: "Econfia Contact Search" },
-  ],
-  tarifas: [
-    { id: 7, producto: "credit-report", cantidad: 1, precio_unitario: "30000.00", precio_paquete: "30000.00", descuento_porcentaje: "0", precio_consulta_adicional: null, activo: true },
-    { id: 8, producto: "adjudicator", cantidad: 1, precio_unitario: "27000.00", precio_paquete: "27000.00", descuento_porcentaje: "0", precio_consulta_adicional: null, activo: true },
-  ],
-});
-
-describe("tarifas por producto", () => {
-  it("multiplica cantidad × precio y una tarifa nueva hereda producto y precio", async () => {
-    preparar([EXPERIAN]);
+describe("tabla de planes", () => {
+  it("muestra cada producto y los servicios, con aviso si no tienen precio", async () => {
+    preparar();
     render(<AdminPlanes />);
-    fireEvent.click(await screen.findByRole("button", { name: "Tarifas" }));
-    expect(screen.getAllByLabelText("Producto")).toHaveLength(2);
-
-    fireEvent.click(screen.getByRole("button", { name: "+ Agregar tarifa" }));
-    const productos = screen.getAllByLabelText("Producto");
-    expect(productos[2]).toHaveValue("adjudicator");
-
-    const cantidades = screen.getAllByLabelText("Cantidad de consultas");
-    fireEvent.change(cantidades[2], { target: { value: "500" } });
-    expect(screen.getAllByLabelText("Precio del paquete")[2]).toHaveValue("13.500.000");
+    const fila = (await screen.findByText("Econfia Contact Search")).closest("tr");
+    expect(fila).toHaveTextContent("Sin precio");
+    expect(screen.getByText("Econfia Credit Report").closest("tr")).toHaveTextContent("30.000");
+    expect(screen.getAllByText("Estudio de seguridad").pop().closest("tr")).toHaveTextContent("Sin precio");
   });
 
-  it("al escoger el producto usa su precio y solo muestra sus tarifas", async () => {
-    preparar([EXPERIAN]);
-    await abrirPropuestas();
-    fireEvent.change(screen.getByLabelText("Plan o servicio"), { target: { value: "3" } });
-    fireEvent.change(screen.getByLabelText("Producto"), { target: { value: "credit-report" } });
-    expect(screen.getByLabelText(/^Precio por consulta/)).toHaveValue("30.000");
-    const opciones = within(screen.getByLabelText("Tarifa por volumen")).getAllByRole("option");
-    expect(opciones).toHaveLength(2);
-    expect(within(resumen()).getByRole("listitem")).toHaveTextContent("Econfia Credit Report");
+  it("los precios del plan Experian traen una fila por cada producto faltante", async () => {
+    preparar();
+    render(<AdminPlanes />);
+    const fila = (await screen.findByText("Econfia Contact Search")).closest("tr");
+    fireEvent.click(within(fila).getByRole("button", { name: "Poner precio" }));
+    const productos = screen.getAllByLabelText("Producto");
+    expect(productos).toHaveLength(3);
+    expect(productos[2]).toHaveValue("contact-search");
+
+    fireEvent.change(screen.getAllByLabelText("Cantidad de consultas")[2], { target: { value: "500" } });
+    fireEvent.change(screen.getAllByLabelText("Precio unitario")[2], { target: { value: "26.000" } });
+    expect(screen.getAllByLabelText("Precio del paquete")[2]).toHaveValue("13.000.000");
   });
 });
 
 describe("armador de paquetes", () => {
-  it("combina consultas con fuentes, servicio y bono, y el bono no suma", async () => {
+  it("marcar suma solo, con el precio de cada producto", async () => {
     const envios = preparar();
     await abrirPropuestas();
-
     fireEvent.change(screen.getByLabelText("Nombre del cliente"), { target: { value: "Ana" } });
     fireEvent.change(screen.getByLabelText("Correo"), { target: { value: "ana@example.com" } });
 
-    // Línea de consultas: reutiliza la tarjeta vacía inicial.
-    fireEvent.change(screen.getAllByLabelText("Plan o servicio").pop(), { target: { value: "1" } });
+    fireEvent.click(casilla("Econfia Credit Report"));
+    fireEvent.click(casilla("Polígrafo"));
+    expect(total()).toHaveTextContent("130.000");
+
+    // Desmarcar quita la línea y resta.
+    fireEvent.click(casilla("Polígrafo"));
+    expect(total()).toHaveTextContent("30.000");
+    fireEvent.click(casilla("Polígrafo"));
+
+    fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
+    await waitFor(() => expect(envios).toHaveLength(1));
+    const [credit, poligrafo] = envios[0].items;
+    expect(credit.producto).toBe("credit-report");
+    expect(credit.tarifa_origen).toBe(7);
+    expect(poligrafo.plan).toBe(2);
+    expect(poligrafo.precio_unitario).toBe(100000);
+  });
+
+  it("la cantidad escoge la tarifa que aplica", async () => {
+    preparar();
+    await abrirPropuestas();
+    fireEvent.click(casilla("EconfiaFast"));
+    const cantidad = screen.getByLabelText("Cantidad de EconfiaFast");
+
+    fireEvent.change(cantidad, { target: { value: "10" } });
+    expect(total()).toHaveTextContent("50.000");
+
+    fireEvent.click(screen.getByRole("button", { name: "500" }));
+    expect(total()).toHaveTextContent("2.000.000");
+
+    // Entre rangos usa el precio unitario del rango alcanzado: 600 × 4.000.
+    fireEvent.change(cantidad, { target: { value: "600" } });
+    expect(total()).toHaveTextContent("2.400.000");
+  });
+
+  it("un producto sin precio no se puede marcar y el regalo no suma", async () => {
+    preparar();
+    await abrirPropuestas();
+    expect(casilla("Estudio de seguridad")).toBeDisabled();
+    expect(casilla("Econfia Contact Search")).toBeDisabled();
+
+    fireEvent.click(casilla("Polígrafo"));
+    fireEvent.click(screen.getByRole("button", { name: /Regalar/ }));
+    const lineas = within(resumen()).getAllByRole("listitem");
+    expect(lineas).toHaveLength(2);
+    expect(lineas[1]).toHaveTextContent("Sin costo");
+    expect(total()).toHaveTextContent("100.000");
+
+    // Desmarcar quita también su regalo.
+    fireEvent.click(casilla("Polígrafo"));
+    expect(screen.getByText("Todavía no has marcado nada.")).toBeInTheDocument();
+  });
+
+  it("guarda las fuentes escogidas de una línea", async () => {
+    const envios = preparar();
+    await abrirPropuestas();
+    fireEvent.change(screen.getByLabelText("Nombre del cliente"), { target: { value: "Ana" } });
+    fireEvent.change(screen.getByLabelText("Correo"), { target: { value: "ana@example.com" } });
+    fireEvent.click(casilla("EconfiaFast"));
     fireEvent.click(screen.getByRole("button", { name: "Escoger fuentes" }));
     fireEvent.click(await screen.findByLabelText("Lista OFAC"));
     fireEvent.click(screen.getByRole("button", { name: "Confirmar selección" }));
     await waitFor(() => expect(screen.getByText("1 fuente incluida")).toBeInTheDocument());
-
-    fireEvent.click(screen.getByRole("button", { name: "+ Polígrafo" }));
-    fireEvent.click(screen.getByRole("button", { name: /\+ Bono/ }));
-    const selects = screen.getAllByLabelText("Plan o servicio");
-    fireEvent.change(selects[selects.length - 1], { target: { value: "2" } });
-
-    const lineas = within(resumen()).getAllByRole("listitem");
-    expect(lineas).toHaveLength(3);
-    expect(lineas[0]).toHaveTextContent("1 fuente");
-    expect(lineas[1]).toHaveTextContent(/1 prueba$|1 prueba\b/);
-    expect(lineas[2]).toHaveTextContent("Sin costo");
-    expect(screen.getByText("Total propuesto").parentElement).toHaveTextContent("105.000");
-
     fireEvent.click(screen.getByRole("button", { name: "Guardar borrador" }));
     await waitFor(() => expect(envios).toHaveLength(1));
-    const [consultas, poligrafo, bono] = envios[0].items;
-    expect(consultas.fuentes).toEqual(["ofac"]);
-    expect(poligrafo.plan).toBe(2);
-    expect(poligrafo.es_bono).toBe(false);
-    expect(bono.es_bono).toBe(true);
-  });
-
-  it("avisa si el servicio aún no se ha creado", async () => {
-    preparar([PLANES[0]]);
-    await abrirPropuestas();
-    fireEvent.click(screen.getByRole("button", { name: "+ Estudio de seguridad" }));
-    expect(await screen.findByText(/Primero crea «Estudio de seguridad»/)).toBeInTheDocument();
+    expect(envios[0].items[0].fuentes).toEqual(["ofac"]);
   });
 });
