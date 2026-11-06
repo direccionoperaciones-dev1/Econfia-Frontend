@@ -161,6 +161,14 @@ export default function Header() {
           </NavLink>
 
           <NavLink
+            to="/normativa"
+            className={({ isActive }) =>
+              `${linkBase} ${isActive ? linkActive : ""}`
+            }
+          >
+            Normativa
+          </NavLink>
+          <NavLink
             to="/blog"
             className={({ isActive }) =>
               `${linkBase} ${isActive ? linkActive : ""}`
@@ -297,6 +305,15 @@ export default function Header() {
               Beneficios
             </NavLink>
 
+            <NavLink
+              to="/normativa"
+              className={({ isActive }) =>
+                `text-content font-medium py-2 ${isActive ? 'text-brand' : 'hover:text-brand'} transition`
+              }
+              onClick={() => setIsMobileMenuOpen(false)}
+            >
+              Normativa
+            </NavLink>
             <NavLink
               to="/blog"
               className={({ isActive }) =>

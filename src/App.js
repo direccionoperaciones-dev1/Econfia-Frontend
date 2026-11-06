@@ -64,6 +64,7 @@ import ConsultaReconocer from "./views/ConsultaReconocer";
 import ConsultaConsolidadoRiesgo from "./views/ConsultaConsolidadoRiesgo";
 import VerificarReporte from "./pages/VerificarReporte";
 import Beneficios from "./pages/Beneficios";
+import CentroNormativo from "./pages/CentroNormativo";
 import ChatbotFlotante from "./components/ChatbotFlotante";
 import AdminSoporte from "./views/AdminSoporte";
 import AdminBlog from "./components/AdminBlog";
@@ -796,6 +797,7 @@ export default function App() {
             {/* Verificación pública QR */}
             <Route path="/econfia/resumen-consulta/:consultaId" element={<VerificarReporte />} />
             <Route path="/beneficios" element={<Beneficios />} />
+            <Route path="/normativa" element={<CentroNormativo />} />
             <Route path="/w/:token" element={<WalletPublico />} />
             <Route path="/wallet-invitacion" element={<AceptarInvitacion />} />
             <Route path="/verificar-credencial" element={<VerificarCredencial />} />
