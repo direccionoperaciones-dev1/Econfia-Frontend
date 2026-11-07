@@ -120,7 +120,7 @@ export default function GestionEmpresa() {
         {["usuarios", "centros", "auditoria"].map((t) => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === t ? "bg-brand text-white" : "bg-surface-2/60 text-muted hover:text-content"}`}>
-            {t === "usuarios" ? "Usuarios" : t === "centros" ? "Centros de costos" : "Informe / Auditoría"}
+            {t === "usuarios" ? "Usuarios" : t === "centros" ? "Central de gastos" : "Informe / Auditoría"}
           </button>
         ))}
       </div>
