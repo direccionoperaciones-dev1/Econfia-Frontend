@@ -348,6 +348,29 @@ function IntroVideoOverlay() {
               0%, 100% { box-shadow: 0 0 25px 4px rgba(239,68,68,0.45), 0 0 60px 10px rgba(239,68,68,0.15); }
               50% { box-shadow: 0 0 40px 10px rgba(239,68,68,0.7), 0 0 90px 18px rgba(239,68,68,0.28); }
             }
+            @keyframes econfiaRise {
+              0% { opacity: 0; transform: translateY(14px); }
+              100% { opacity: 1; transform: translateY(0); }
+            }
+            .econfia-rise { opacity: 0; animation: econfiaRise 0.9s ease-out forwards; }
+            @keyframes econfiaTextShine {
+              0% { background-position: 150% 0; }
+              60%, 100% { background-position: -50% 0; }
+            }
+            .econfia-text-shine {
+              background-image: linear-gradient(110deg, var(--shine-base) 35%, #ffffff 48%, #fff1f2 52%, var(--shine-base) 65%);
+              background-size: 250% 100%;
+              background-position: 150% 0;
+              -webkit-background-clip: text;
+              background-clip: text;
+              -webkit-text-fill-color: transparent;
+              color: transparent;
+              animation: econfiaTextShine 3.2s ease-in-out 1.2s infinite;
+            }
+            @media (prefers-reduced-motion: reduce) {
+              .econfia-rise { opacity: 1; animation: none; }
+              .econfia-text-shine { animation: none; }
+            }
             .econfia-enter-btn { animation: econfiaGlow 2.1s ease-in-out infinite; }
             .econfia-shine-sweep {
               position: absolute;
@@ -361,22 +384,54 @@ function IntroVideoOverlay() {
             }
           `}</style>
 
-          <div className="flex flex-col items-center gap-8">
-            <img
-              src="/logo192.png"
-              alt="Econfia"
-              className="h-16 w-auto drop-shadow-[0_0_25px_rgba(239,68,68,0.55)]"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
-            />
+          <div className="flex flex-col items-center gap-8 px-6 text-center">
+            <div className="flex flex-col items-center gap-4">
+              <img
+                src="/logo192.png"
+                alt=""
+                className="econfia-rise h-16 w-auto drop-shadow-[0_0_25px_rgba(239,68,68,0.55)]"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+              <h1 className="econfia-rise leading-tight text-white" style={{ animationDelay: "0.15s" }}>
+                <span
+                  className="econfia-text-shine block text-4xl font-bold tracking-tight sm:text-5xl"
+                  style={{ "--shine-base": "#d8b4ba" }}
+                >
+                  Econfia
+                </span>
+                <span
+                  className="econfia-text-shine mt-1 block whitespace-nowrap text-base font-light uppercase tracking-[0.2em] sm:text-2xl sm:tracking-[0.35em]"
+                  style={{ "--shine-base": "#fb7185" }}
+                >
+                  Trust &amp; Compliance
+                </span>
+              </h1>
+              <div
+                className="econfia-rise h-px w-24 bg-gradient-to-r from-transparent via-rose-400 to-transparent"
+                style={{ animationDelay: "0.3s" }}
+              />
+              <p
+                className="econfia-rise max-w-md text-sm text-white/70 sm:text-base"
+                style={{ animationDelay: "0.45s" }}
+              >
+                Inteligencia, conocimiento y evaluación integral de riesgos de terceros
+              </p>
+              <p
+                className="econfia-rise text-sm italic text-rose-200/90 sm:text-base"
+                style={{ animationDelay: "0.6s" }}
+              >
+                «Verificamos la confianza. Anticipamos los riesgos».
+              </p>
+            </div>
             <button
               type="button"
               onClick={startIntro}
               className="econfia-enter-btn relative overflow-hidden rounded-full bg-gradient-to-r from-red-600 via-rose-500 to-red-700 px-12 py-4 text-lg font-semibold tracking-wide text-white transition-transform duration-300 hover:scale-105"
             >
               <span className="econfia-shine-sweep" />
-              <span className="relative">!Comenzar¡</span>
+              <span className="relative">¡Comenzar!</span>
             </button>
           </div>
         </div>
