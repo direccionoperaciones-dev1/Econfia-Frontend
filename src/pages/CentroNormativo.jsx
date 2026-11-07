@@ -9,6 +9,7 @@ import {
   Truck,
   ShieldCheck,
   Dices,
+  Gavel,
   Scale,
   CheckCircle2,
   ExternalLink,
@@ -23,11 +24,23 @@ import {
   ListChecks,
   Network,
   History,
+  UserCheck,
+  Database,
+  Briefcase,
+  Cog,
+  Target,
+  ChevronLeft,
+  ChevronRight,
+  Pause,
+  Play,
 } from "lucide-react";
 import {
   REVISION,
   SECTORES,
+  FUENTES_BASE,
   CONCEPTOS,
+  GRUPOS_GLOSARIO,
+  OFICIAL,
   LISTAS,
   ECOSISTEMA,
   LINEA_TIEMPO,
@@ -60,14 +73,61 @@ const estilos = `
     to   { opacity: 1; transform: translateY(0); }
   }
   .norm-fade { animation: normFade .35s ease both; }
+
+  @keyframes normUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes normPop {
+    0%   { opacity: 0; transform: scale(.55); }
+    70%  { opacity: 1; transform: scale(1.08); }
+    100% { opacity: 1; transform: scale(1); }
+  }
+  @keyframes normSlide {
+    from { opacity: 0; transform: translateX(-14px); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes normBar {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+  @keyframes normPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgb(var(--th-brand) / .35); }
+    50%      { box-shadow: 0 0 0 10px rgb(var(--th-brand) / 0); }
+  }
+  @keyframes normFloat {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-4px); }
+  }
+  @keyframes normProgreso {
+    from { width: 0%; }
+    to   { width: 100%; }
+  }
+  .norm-up    { animation: normUp .55s cubic-bezier(.2,.7,.2,1) both; }
+  .norm-pop   { animation: normPop .5s cubic-bezier(.2,.7,.2,1) both; }
+  .norm-slide { animation: normSlide .45s cubic-bezier(.2,.7,.2,1) both; }
+  .norm-bar   { transform-origin: left; animation: normBar .7s cubic-bezier(.2,.7,.2,1) both; }
+  .norm-pulse { animation: normPulse 2.2s ease-in-out infinite; }
+  .norm-float { animation: normFloat 3.5s ease-in-out infinite; }
+  .norm-progreso { animation: normProgreso linear both; }
+  .norm-chip { transition: transform .2s ease, box-shadow .2s ease; }
+  .norm-chip:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgb(var(--th-brand) / .18); }
+  @media (prefers-reduced-motion: reduce) {
+    .norm-up, .norm-pop, .norm-slide, .norm-bar, .norm-pulse, .norm-float, .norm-fade { animation: none !important; }
+  }
 `;
 
-if (typeof document !== "undefined" && !document.getElementById(STYLE_ID)) {
-  const tag = document.createElement("style");
-  tag.id = STYLE_ID;
+if (typeof document !== "undefined") {
+  let tag = document.getElementById(STYLE_ID);
+  if (!tag) {
+    tag = document.createElement("style");
+    tag.id = STYLE_ID;
+    document.head.appendChild(tag);
+  }
   tag.innerHTML = estilos;
-  document.head.appendChild(tag);
 }
+
+const retraso = (i, paso = 70) => ({ animationDelay: `${i * paso}ms` });
 
 const COLORES = {
   cyan:    { bg: "bg-cyan-500/10",    text: "text-cyan-500",    ring: "ring-cyan-500/25",    border: "border-cyan-500/40",    solid: "bg-cyan-500" },
@@ -77,6 +137,7 @@ const COLORES = {
   amber:   { bg: "bg-amber-500/10",   text: "text-amber-600",   ring: "ring-amber-500/25",   border: "border-amber-500/40",   solid: "bg-amber-500" },
   purple:  { bg: "bg-purple-500/10",  text: "text-purple-500",  ring: "ring-purple-500/25",  border: "border-purple-500/40",  solid: "bg-purple-500" },
   orange:  { bg: "bg-orange-500/10",  text: "text-orange-500",  ring: "ring-orange-500/25",  border: "border-orange-500/40",  solid: "bg-orange-500" },
+  teal:    { bg: "bg-teal-500/10",    text: "text-teal-500",    ring: "ring-teal-500/25",    border: "border-teal-500/40",    solid: "bg-teal-500" },
 };
 
 const ICONOS_SECTOR = {
@@ -87,15 +148,17 @@ const ICONOS_SECTOR = {
   transporte: Truck,
   vigilancia: ShieldCheck,
   juegos: Dices,
+  publico: Gavel,
 };
 
-const ICONOS_LISTA = { vinculantes: Scale, internacionales: Globe2, nacionales: Flag };
+const ICONOS_LISTA = { vinculantes: Scale, referencia: Globe2, antecedentes: Flag, pep: UserCheck };
 
 const SECCIONES = [
   { id: "sectores", label: "¿Qué me aplica?", icon: ListChecks },
   { id: "ecosistema", label: "Ecosistema", icon: Network },
   { id: "listas", label: "Listas restrictivas", icon: Scale },
-  { id: "conceptos", label: "Conceptos clave", icon: BookOpen },
+  { id: "oficial", label: "Oficial de cumplimiento", icon: UserCheck },
+  { id: "conceptos", label: "Glosario", icon: BookOpen },
   { id: "historia", label: "Línea de tiempo", icon: History },
 ];
 
@@ -111,14 +174,28 @@ function Encabezado({ eyebrow, titulo, texto }) {
 
 function ExploradorSectores() {
   const [activo, setActivo] = useState(SECTORES[0].id);
+  const [pestana, setPestana] = useState("normas");
+  const [verHistorial, setVerHistorial] = useState(false);
   const sector = SECTORES.find((s) => s.id === activo);
   const c = COLORES[sector.color];
   const Icono = ICONOS_SECTOR[sector.id];
+  const vigentes = sector.normas.filter((n) => n.estado === "vigente");
+  const historicas = sector.normas.filter((n) => n.estado !== "vigente");
+  const PESTANAS = [
+    { id: "normas", label: "Marco normativo", icon: History },
+    { id: "exige", label: "Qué exige", icon: ListChecks },
+    { id: "fuentes", label: "Fuentes Econfia", icon: Database },
+  ];
+
+  const escoger = (id) => {
+    setActivo(id);
+    setVerHistorial(false);
+  };
 
   return (
-    <div className="grid gap-5 lg:grid-cols-[minmax(0,320px)_1fr]">
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,300px)_1fr]">
       <div className="flex gap-3 overflow-x-auto pb-2 lg:flex-col lg:overflow-visible lg:pb-0" role="tablist" aria-label="Sectores">
-        {SECTORES.map((s) => {
+        {SECTORES.map((s, i) => {
           const I = ICONOS_SECTOR[s.id];
           const cs = COLORES[s.color];
           const sel = s.id === activo;
@@ -128,12 +205,13 @@ function ExploradorSectores() {
               type="button"
               role="tab"
               aria-selected={sel}
-              onClick={() => setActivo(s.id)}
-              className={`flex min-w-[220px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition lg:min-w-0 ${
-                sel ? `${cs.border} ${cs.bg} shadow-lg` : "border-line/10 bg-surface/70 hover:border-brand/25"
+              onClick={() => escoger(s.id)}
+              style={retraso(i, 50)}
+              className={`norm-slide group flex min-w-[210px] items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all duration-300 lg:min-w-0 ${
+                sel ? `${cs.border} ${cs.bg} shadow-lg lg:translate-x-1` : "border-line/10 bg-surface/60 hover:border-brand/25 hover:lg:translate-x-1"
               }`}
             >
-              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${cs.bg} ${cs.text} ring-1 ${cs.ring}`}>
+              <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${cs.bg} ${cs.text} ring-1 ${cs.ring} transition-transform duration-300 group-hover:scale-110 ${sel ? "scale-110" : ""}`}>
                 <I className="h-5 w-5" />
               </span>
               <span className="min-w-0">
@@ -145,77 +223,145 @@ function ExploradorSectores() {
         })}
       </div>
 
-      <div key={sector.id} className="norm-card norm-fade p-6 md:p-8" role="tabpanel">
-        <div className="relative z-10">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <span className={`flex h-14 w-14 items-center justify-center rounded-2xl ${c.bg} ${c.text} ring-1 ${c.ring}`}>
-                <Icono className="h-7 w-7" />
-              </span>
-              <div>
-                <h3 className="text-xl font-black text-content md:text-2xl">{sector.nombre}</h3>
-                <p className="text-sm text-muted">{sector.ejemplo}</p>
-              </div>
+      <article key={sector.id} className="norm-card norm-up overflow-hidden" role="tabpanel">
+        <div className={`norm-bar h-1.5 w-full ${c.solid}`} />
+        <div className="relative z-10 p-6 md:p-8">
+          <header className="flex flex-wrap items-center gap-4">
+            <span className={`norm-pop norm-float flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${c.bg} ${c.text} ring-1 ${c.ring}`}>
+              <Icono className="h-7 w-7" />
+            </span>
+            <div className="norm-up min-w-0 flex-1" style={retraso(1)}>
+              <h3 className="text-xl font-black text-content md:text-2xl">{sector.nombre}</h3>
+              <p className="text-sm text-muted">{sector.ejemplo}</p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              {sector.sistemas.map((sis) => (
-                <span key={sis} className={`rounded-full ${c.solid} px-3 py-1 text-xs font-black text-white`}>
+            <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+              {sector.sistemas.map((sis, i) => (
+                <span key={sis} style={retraso(i + 3, 90)} className={`norm-pop rounded-full ${c.solid} px-3 py-1 text-xs font-black tracking-wide text-white shadow-md`}>
                   {sis}
                 </span>
               ))}
             </div>
-          </div>
+          </header>
 
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <div className="rounded-2xl border border-line/10 bg-surface/70 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted">Supervisor</p>
-              <p className="mt-1 text-sm font-black text-content">{sector.supervisor}</p>
-            </div>
-            <div className="rounded-2xl border border-line/10 bg-surface/70 p-4">
-              <p className="text-[11px] font-bold uppercase tracking-[0.15em] text-muted">Norma de referencia</p>
-              <p className="mt-1 text-sm font-semibold text-content">{sector.norma}</p>
-            </div>
-          </div>
+          <dl className="mt-6 grid gap-3 sm:grid-cols-2">
+            {[["Ente regulador", sector.regulador], ["Circular jurídica", sector.instrumento]].map(([titulo, valor], i) => (
+              <div key={titulo} style={retraso(i + 2)} className={`norm-up rounded-2xl border-l-4 ${c.border} bg-surface/50 px-4 py-3`}>
+                <dt className="text-[11px] font-bold uppercase tracking-[0.18em] text-muted">{titulo}</dt>
+                <dd className="mt-1 text-sm font-black text-content">{valor}</dd>
+              </div>
+            ))}
+          </dl>
 
           {sector.novedad && (
-            <div className={`mt-4 flex gap-3 rounded-2xl border ${c.border} ${c.bg} p-4`}>
-              <Sparkles className={`mt-0.5 h-5 w-5 shrink-0 ${c.text}`} />
-              <p className="text-sm leading-6 text-content">
-                <span className="font-black">Novedad: </span>
-                {sector.novedad}
-              </p>
+            <div style={retraso(4)} className={`norm-up mt-4 flex gap-3 rounded-2xl ${c.bg} px-4 py-3`}>
+              <Sparkles className={`mt-0.5 h-4 w-4 shrink-0 ${c.text}`} />
+              <p className="text-sm leading-6 text-content"><span className={`font-black ${c.text}`}>Novedad: </span>{sector.novedad}</p>
             </div>
           )}
 
-          <p className="mt-6 text-sm font-black text-content">Lo que exige en la práctica</p>
-          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-            {sector.exige.map((e) => (
-              <li key={e} className="flex items-start gap-2 text-sm text-muted">
-                <CheckCircle2 className={`mt-0.5 h-4 w-4 shrink-0 ${c.text}`} />
-                <span>{e}</span>
-              </li>
+          <div className="mt-6 flex flex-wrap gap-1 rounded-2xl bg-surface-2/60 p-1" role="tablist" aria-label="Detalle del sector">
+            {PESTANAS.map(({ id, label, icon: I }) => (
+              <button
+                key={id}
+                type="button"
+                role="tab"
+                aria-selected={pestana === id}
+                onClick={() => setPestana(id)}
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-xl px-3 py-2 text-xs font-black transition-all duration-300 ${
+                  pestana === id ? `${c.solid} text-white shadow-md` : "text-muted hover:text-content"
+                }`}
+              >
+                <I className="h-3.5 w-3.5" /> {label}
+              </button>
             ))}
-          </ul>
+          </div>
 
-          <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-line/10 pt-5">
-            <p className="text-sm text-muted">
-              <span className="font-bold text-content">Con Econfia:</span> debida diligencia y consulta de listas en una sola consulta, con evidencia descargable.
-            </p>
+          <div key={`${sector.id}-${pestana}`} className="mt-4 min-h-[170px]">
+            {pestana === "normas" && (
+              <div>
+                <ol className="space-y-2">
+                  {vigentes.map((n, i) => (
+                    <li key={n.norma} style={retraso(i)} className="norm-slide flex flex-wrap items-start justify-between gap-2 rounded-xl bg-surface/60 px-4 py-3">
+                      <span className="min-w-0">
+                        <span className="block text-sm font-black text-content">{n.norma}</span>
+                        <span className="block text-xs text-muted">{n.tema}</span>
+                      </span>
+                      <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-black text-emerald-500">Vigente</span>
+                    </li>
+                  ))}
+                </ol>
+                {historicas.length > 0 && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={() => setVerHistorial((v) => !v)}
+                      aria-expanded={verHistorial}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-brand hover:underline"
+                    >
+                      <History className="h-3.5 w-3.5" />
+                      {verHistorial ? "Ocultar historial" : `Ver historial (${historicas.length})`}
+                      <ChevronDown className={`h-3.5 w-3.5 transition-transform ${verHistorial ? "rotate-180" : ""}`} />
+                    </button>
+                    {verHistorial && (
+                      <ol className="mt-3 space-y-2 border-l-2 border-dashed border-line/25 pl-4">
+                        {historicas.map((n, i) => (
+                          <li key={n.norma} style={retraso(i)} className="norm-slide flex flex-wrap items-start justify-between gap-2">
+                            <span className="min-w-0">
+                              <span className="block text-sm font-semibold text-muted">{n.norma}</span>
+                              <span className="block text-xs text-muted/80">{n.tema}</span>
+                            </span>
+                            <span className="rounded-full bg-line/10 px-2.5 py-0.5 text-[11px] font-bold text-muted">Histórica</span>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {pestana === "exige" && (
+              <ul className="grid gap-2 sm:grid-cols-2">
+                {sector.exige.map((e, i) => (
+                  <li key={e} style={retraso(i, 60)} className="norm-up flex items-start gap-2 rounded-xl bg-surface/50 px-3 py-2.5 text-sm text-content/90">
+                    <CheckCircle2 className={`mt-0.5 h-4 w-4 shrink-0 ${c.text}`} />
+                    <span>{e}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {pestana === "fuentes" && (
+              <div>
+                <div className="flex flex-wrap gap-2">
+                  {sector.fuentes.map((f, i) => (
+                    <span key={f} style={retraso(i, 60)} className={`norm-pop norm-chip rounded-full border ${c.border} ${c.bg} px-3 py-1.5 text-xs font-bold text-content`}>
+                      {f}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-4 text-xs text-muted">
+                  Además de la base para todos los sectores: {FUENTES_BASE.join(", ")}.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <footer className="mt-6 flex justify-end">
             <a
               href={sector.url}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-full border border-line/15 px-4 py-2 text-xs font-bold text-content transition hover:border-brand/40 hover:text-brand"
             >
-              Fuente oficial <ExternalLink className="h-3.5 w-3.5" />
+              Sitio del regulador <ExternalLink className="h-3.5 w-3.5" />
             </a>
-          </div>
+          </footer>
         </div>
-      </div>
+      </article>
     </div>
   );
 }
-
 function Ecosistema() {
   return (
     <div className="grid gap-4 md:grid-cols-5">
@@ -260,7 +406,7 @@ function Listas() {
     <div className="norm-card p-6 md:p-8">
       <div className="relative z-10">
         <div className="flex flex-wrap justify-center gap-2" role="tablist" aria-label="Tipos de listas">
-          {claves.map((k) => {
+          {claves.map((k, i) => {
             const I = ICONOS_LISTA[k];
             const sel = k === activa;
             const ck = COLORES[LISTAS[k].color];
@@ -275,6 +421,7 @@ function Listas() {
                   sel ? `${ck.border} ${ck.bg} ${ck.text}` : "border-line/15 text-muted hover:text-content"
                 }`}
               >
+                <span className="text-[11px] opacity-70">{i + 1}</span>
                 <I className="h-4 w-4" />
                 {LISTAS[k].titulo}
               </button>
@@ -302,15 +449,170 @@ function Listas() {
   );
 }
 
+const ICONOS_OFICIAL = [Briefcase, Cog, Target, Landmark];
+const DURACION_TARJETA = 7000;
+
+function OficialCumplimiento() {
+  const bloques = OFICIAL.bloques;
+  const [paso, setPaso] = useState(0);
+  const [item, setItem] = useState(0);
+  const [pausa, setPausa] = useState(() => {
+    try {
+      return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    } catch {
+      return false;
+    }
+  });
+  const [sobre, setSobre] = useState(false);
+  const bloque = bloques[paso];
+  const punto = bloque.puntos[item];
+  const total = bloques.reduce((n, b) => n + b.puntos.length, 0);
+  const posicion = bloques.slice(0, paso).reduce((n, b) => n + b.puntos.length, 0) + item + 1;
+  const detenido = pausa || sobre;
+
+  const mover = (delta) => {
+    let p = paso;
+    let i = item + delta;
+    if (i >= bloques[p].puntos.length) {
+      p = (p + 1) % bloques.length;
+      i = 0;
+    } else if (i < 0) {
+      p = (p - 1 + bloques.length) % bloques.length;
+      i = bloques[p].puntos.length - 1;
+    }
+    setPaso(p);
+    setItem(i);
+  };
+
+  const irAPaso = (p) => {
+    setPaso(p);
+    setItem(0);
+  };
+
+  useEffect(() => {
+    if (detenido) return undefined;
+    const t = setTimeout(() => mover(1), DURACION_TARJETA);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paso, item, detenido]);
+
+  const IconoPaso = ICONOS_OFICIAL[paso];
+
+  return (
+    <div
+      className="norm-card overflow-hidden"
+      onMouseEnter={() => setSobre(true)}
+      onMouseLeave={() => setSobre(false)}
+      onKeyDown={(e) => {
+        if (e.key === "ArrowRight") mover(1);
+        if (e.key === "ArrowLeft") mover(-1);
+      }}
+    >
+      <div className="h-1.5 w-full bg-gradient-to-r from-cyan-500 via-blue-500 to-purple-500" />
+      <div className="relative z-10 px-5 py-8 md:px-10">
+        <p className="mx-auto max-w-2xl text-center text-base font-semibold text-content md:text-lg">{OFICIAL.resumen}</p>
+
+        {/* Diagrama de flujo de los 4 pasos */}
+        <div className="relative mx-auto mt-8 max-w-3xl">
+          <div className="absolute left-[12.5%] right-[12.5%] top-6 h-1 rounded-full bg-line/15" aria-hidden />
+          <div
+            className="absolute left-[12.5%] top-6 h-1 rounded-full bg-gradient-to-r from-cyan-500 to-blue-500 transition-all duration-700"
+            style={{ width: `${(paso / (bloques.length - 1)) * 75}%` }}
+            aria-hidden
+          />
+          <div className="relative grid grid-cols-4" role="tablist" aria-label="Pasos del oficial de cumplimiento">
+            {bloques.map((b, i) => {
+              const I = ICONOS_OFICIAL[i];
+              const actual = i === paso;
+              const hecho = i < paso;
+              return (
+                <button
+                  key={b.pregunta}
+                  type="button"
+                  role="tab"
+                  aria-selected={actual}
+                  onClick={() => irAPaso(i)}
+                  className="group flex flex-col items-center gap-2 px-1 text-center"
+                >
+                  <span
+                    className={`flex h-12 w-12 items-center justify-center rounded-full border-2 transition-all duration-500 ${
+                      actual
+                        ? "norm-pulse scale-110 border-brand bg-brand text-white"
+                        : hecho
+                          ? "border-brand bg-surface text-brand"
+                          : "border-line/25 bg-surface text-muted group-hover:border-brand/50 group-hover:text-brand"
+                    }`}
+                  >
+                    <I className="h-5 w-5" />
+                  </span>
+                  <span className={`text-xs font-black leading-tight md:text-sm ${actual ? "text-content" : "text-muted"}`}>{b.pregunta}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Carrusel de la idea actual */}
+        <div className="mx-auto mt-8 max-w-2xl">
+          <div key={`${paso}-${item}`} className="norm-up relative overflow-hidden rounded-3xl border border-brand/25 bg-gradient-to-br from-brand/10 via-surface/60 to-surface/30 p-6 md:p-8" aria-live="polite">
+            <div className="flex items-start gap-4">
+              <span className="norm-pop flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand/15 text-brand ring-1 ring-brand/30">
+                <IconoPaso className="h-6 w-6" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase tracking-[0.2em] text-brand">
+                  {bloque.pregunta} · {item + 1} de {bloque.puntos.length}
+                </p>
+                <h3 className="mt-1 text-xl font-black text-content md:text-2xl">{punto.titulo}</h3>
+                <p className="mt-2 text-sm leading-7 text-muted md:text-base">{punto.texto}</p>
+              </div>
+            </div>
+            {!detenido && (
+              <div className="absolute bottom-0 left-0 h-1 bg-brand/60 norm-progreso" style={{ animationDuration: `${DURACION_TARJETA}ms` }} aria-hidden />
+            )}
+          </div>
+
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <button type="button" onClick={() => mover(-1)} aria-label="Anterior"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-line/20 text-content transition hover:border-brand/50 hover:text-brand">
+              <ChevronLeft className="h-5 w-5" />
+            </button>
+            <div className="flex flex-1 flex-col items-center gap-2">
+              <div className="flex gap-1.5">
+                {bloque.puntos.map((pt, i) => (
+                  <button key={pt.titulo} type="button" onClick={() => setItem(i)} aria-label={`Ir a ${pt.titulo}`}
+                    className={`h-2 rounded-full transition-all duration-300 ${i === item ? "w-6 bg-brand" : "w-2 bg-line/30 hover:bg-brand/50"}`} />
+                ))}
+              </div>
+              <span className="text-[11px] text-muted">{posicion} de {total}</span>
+            </div>
+            <button type="button" onClick={() => setPausa((v) => !v)} aria-label={pausa ? "Reproducir" : "Pausar"}
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-line/20 text-muted transition hover:border-brand/50 hover:text-brand">
+              {pausa ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+            </button>
+            <button type="button" onClick={() => mover(1)} aria-label="Siguiente"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-brand text-white shadow-md transition hover:scale-105">
+              <ChevronRight className="h-5 w-5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 function Conceptos() {
   const [filtro, setFiltro] = useState("");
+  const [grupo, setGrupo] = useState("todos");
   const [abierto, setAbierto] = useState(null);
 
   const visibles = useMemo(() => {
     const q = filtro.trim().toLowerCase();
-    if (!q) return CONCEPTOS;
-    return CONCEPTOS.filter((c) => `${c.termino} ${c.corto} ${c.texto}`.toLowerCase().includes(q));
-  }, [filtro]);
+    return CONCEPTOS.filter(
+      (c) =>
+        (grupo === "todos" || c.grupo === grupo) &&
+        (!q || `${c.termino} ${c.corto} ${c.texto}`.toLowerCase().includes(q))
+    );
+  }, [filtro, grupo]);
 
   return (
     <div>
@@ -320,10 +622,26 @@ function Conceptos() {
           type="search"
           value={filtro}
           onChange={(e) => setFiltro(e.target.value)}
-          placeholder="Buscar un término: PEP, ROS, beneficiario…"
+          placeholder="Buscar: SARLAFT, UIAF, PEP, ROS…"
           aria-label="Buscar concepto"
           className="w-full rounded-full border border-line/15 bg-surface/80 py-3 pl-11 pr-4 text-sm text-content outline-none transition focus:border-brand/50"
         />
+      </div>
+
+      <div className="mb-6 flex flex-wrap justify-center gap-2" role="group" aria-label="Filtrar glosario">
+        {GRUPOS_GLOSARIO.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            aria-pressed={grupo === g.id}
+            onClick={() => setGrupo(g.id)}
+            className={`rounded-full border px-4 py-1.5 text-xs font-bold transition ${
+              grupo === g.id ? "border-brand/50 bg-brand/15 text-brand" : "border-line/15 text-muted hover:text-content"
+            }`}
+          >
+            {g.label}
+          </button>
+        ))}
       </div>
 
       {visibles.length === 0 ? (
@@ -412,7 +730,7 @@ export default function CentroNormativo() {
               {[
                 { n: SECTORES.length, t: "sectores explicados" },
                 { n: Object.keys(LISTAS).length, t: "tipos de listas" },
-                { n: CONCEPTOS.length, t: "conceptos clave" },
+                { n: CONCEPTOS.length, t: "términos en el glosario" },
                 { n: LINEA_TIEMPO.length, t: "hitos normativos" },
               ].map(({ n, t }) => (
                 <div key={t} className="rounded-2xl border border-line/10 bg-surface/70 px-5 py-3">
@@ -461,16 +779,31 @@ export default function CentroNormativo() {
           <div className="mx-auto max-w-6xl px-4 md:px-6">
             <Encabezado
               eyebrow="Listas restrictivas"
-              titulo="Vinculantes, de referencia y nacionales"
-              texto="No todas las listas tienen el mismo peso legal. Esta es la diferencia."
+              titulo="Las cuatro categorías de listas"
+              texto="No todas las listas tienen el mismo peso legal: unas son obligatorias, otras son estándar del mercado y otras completan el perfil de la contraparte."
             />
             <Listas />
           </div>
         </section>
 
+        <section id="oficial" className="relative scroll-mt-24 py-14">
+          <div className="mx-auto max-w-5xl px-4 md:px-6">
+            <Encabezado
+              eyebrow="El rol clave"
+              titulo="¿Qué hace un oficial de cumplimiento?"
+              texto="Recorre los cuatro pasos: toca cada uno o deja que avance solo."
+            />
+            <OficialCumplimiento />
+          </div>
+        </section>
+
         <section id="conceptos" className="relative scroll-mt-24 py-14">
           <div className="mx-auto max-w-5xl px-4 md:px-6">
-            <Encabezado eyebrow="Glosario" titulo="Conceptos clave sin tecnicismos" />
+            <Encabezado
+              eyebrow="Glosario"
+              titulo="Siglas y conceptos sin tecnicismos"
+              texto="SARLAFT, SAGRILAFT, SIPLAFT, GAFI, UIAF y los términos que más pregunta un oficial de cumplimiento."
+            />
             <Conceptos />
           </div>
         </section>
