@@ -285,6 +285,9 @@ function LiveStatusCard({ className = "" }) {
   );
 }
 
+const MONT = "'Montserrat', 'Poppins', sans-serif";
+const SERIF = "'Cormorant Garamond', Georgia, serif";
+
 function IntroVideoOverlay() {
   const [visible, setVisible] = React.useState(true);
   const [leaving, setLeaving] = React.useState(false);
@@ -333,12 +336,29 @@ function IntroVideoOverlay() {
 
       {!started && (
         <div
-          className="absolute inset-0 flex flex-col items-center justify-center gap-8 backdrop-blur-sm"
-          style={{
-            background:
-              "radial-gradient(circle at 50% 45%, rgba(120,10,20,0.45) 0%, rgba(15,2,4,0.85) 45%, #000 100%)",
-          }}
+          className="absolute inset-0 flex flex-col items-center justify-center gap-8 overflow-hidden bg-black"
         >
+          <video
+            className="pointer-events-none absolute inset-0 h-full w-full scale-105 object-cover"
+            style={{ filter: "brightness(0.42) saturate(1.1) blur(2px)" }}
+            src="/videos/intro-fondo.mp4"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="auto"
+            aria-hidden="true"
+            onError={(e) => {
+              e.currentTarget.style.display = "none";
+            }}
+          />
+          <div
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(ellipse at 50% 48%, rgba(10,1,3,0.78) 0%, rgba(25,3,7,0.6) 45%, rgba(0,0,0,0.85) 100%)",
+            }}
+          />
           <style>{`
             @keyframes econfiaShine {
               0% { transform: translateX(-150%) rotate(20deg); }
@@ -366,7 +386,9 @@ function IntroVideoOverlay() {
               -webkit-text-fill-color: transparent;
               color: transparent;
               animation: econfiaTextShine 3.2s ease-in-out 1.2s infinite;
+              filter: drop-shadow(0 2px 10px rgba(0,0,0,0.85));
             }
+            .econfia-legible { text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 18px rgba(0,0,0,0.7); }
             @media (prefers-reduced-motion: reduce) {
               .econfia-rise { opacity: 1; animation: none; }
               .econfia-text-shine { animation: none; }
@@ -384,7 +406,7 @@ function IntroVideoOverlay() {
             }
           `}</style>
 
-          <div className="flex flex-col items-center gap-8 px-6 text-center">
+          <div className="relative z-10 flex flex-col items-center gap-8 px-6 text-center">
             <div className="flex flex-col items-center gap-4">
               <img
                 src="/logo192.png"
@@ -396,14 +418,14 @@ function IntroVideoOverlay() {
               />
               <h1 className="econfia-rise leading-tight text-white" style={{ animationDelay: "0.15s" }}>
                 <span
-                  className="econfia-text-shine block text-4xl font-bold tracking-tight sm:text-5xl"
-                  style={{ "--shine-base": "#d8b4ba" }}
+                  className="econfia-text-shine block text-5xl font-extrabold tracking-tight sm:text-7xl"
+                  style={{ "--shine-base": "#ecd3d7", fontFamily: MONT }}
                 >
                   Econfia
                 </span>
                 <span
-                  className="econfia-text-shine mt-1 block whitespace-nowrap text-base font-light uppercase tracking-[0.2em] sm:text-2xl sm:tracking-[0.35em]"
-                  style={{ "--shine-base": "#fb7185" }}
+                  className="econfia-text-shine mt-2 block whitespace-nowrap text-sm font-normal uppercase tracking-[0.3em] sm:text-xl sm:tracking-[0.5em]"
+                  style={{ "--shine-base": "#fb7185", fontFamily: MONT }}
                 >
                   Trust &amp; Compliance
                 </span>
@@ -413,14 +435,14 @@ function IntroVideoOverlay() {
                 style={{ animationDelay: "0.3s" }}
               />
               <p
-                className="econfia-rise max-w-md text-sm text-white/70 sm:text-base"
-                style={{ animationDelay: "0.45s" }}
+                className="econfia-rise econfia-legible max-w-md text-sm font-light leading-relaxed tracking-wide text-white/85 sm:text-base"
+                style={{ animationDelay: "0.45s", fontFamily: MONT }}
               >
                 Inteligencia, conocimiento y evaluación integral de riesgos de terceros
               </p>
               <p
-                className="econfia-rise text-sm italic text-rose-200/90 sm:text-base"
-                style={{ animationDelay: "0.6s" }}
+                className="econfia-rise econfia-legible text-xl italic text-rose-100 sm:text-2xl"
+                style={{ animationDelay: "0.6s", fontFamily: SERIF, fontWeight: 600 }}
               >
                 «Verificamos la confianza. Anticipamos los riesgos».
               </p>
@@ -428,7 +450,8 @@ function IntroVideoOverlay() {
             <button
               type="button"
               onClick={startIntro}
-              className="econfia-enter-btn relative overflow-hidden rounded-full bg-gradient-to-r from-red-600 via-rose-500 to-red-700 px-12 py-4 text-lg font-semibold tracking-wide text-white transition-transform duration-300 hover:scale-105"
+              className="econfia-enter-btn relative overflow-hidden rounded-full bg-gradient-to-r from-red-600 via-rose-500 to-red-700 px-12 py-4 text-base font-semibold uppercase tracking-[0.2em] text-white transition-transform duration-300 hover:scale-105"
+              style={{ fontFamily: MONT }}
             >
               <span className="econfia-shine-sweep" />
               <span className="relative">¡Comenzar!</span>
