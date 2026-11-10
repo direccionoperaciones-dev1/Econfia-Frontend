@@ -129,6 +129,24 @@ if (typeof document !== "undefined") {
 
 const retraso = (i, paso = 70) => ({ animationDelay: `${i * paso}ms` });
 
+// Nombre de la norma como enlace a su fuente oficial (documento o página del regulador).
+function NormaEnlace({ n, className }) {
+  if (!n.url) return <span className={`block ${className}`}>{n.norma}</span>;
+  return (
+    <a
+      href={n.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      title={n.directo ? "Abrir el documento oficial" : "Ver en el sitio oficial del regulador"}
+      className={`group inline-flex items-start gap-1.5 hover:text-brand hover:underline ${className}`}
+    >
+      {n.norma}
+      <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 opacity-60 group-hover:opacity-100" aria-hidden="true" />
+      <span className="sr-only">(se abre en una pestaña nueva)</span>
+    </a>
+  );
+}
+
 const COLORES = {
   cyan:    { bg: "bg-cyan-500/10",    text: "text-cyan-500",    ring: "ring-cyan-500/25",    border: "border-cyan-500/40",    solid: "bg-cyan-500" },
   blue:    { bg: "bg-blue-500/10",    text: "text-blue-500",    ring: "ring-blue-500/25",    border: "border-blue-500/40",    solid: "bg-blue-500" },
@@ -283,7 +301,7 @@ function ExploradorSectores() {
                   {vigentes.map((n, i) => (
                     <li key={n.norma} style={retraso(i)} className="norm-slide flex flex-wrap items-start justify-between gap-2 rounded-xl bg-surface/60 px-4 py-3">
                       <span className="min-w-0">
-                        <span className="block text-sm font-black text-content">{n.norma}</span>
+                        <NormaEnlace n={n} className="text-sm font-black text-content" />
                         <span className="block text-xs text-muted">{n.tema}</span>
                       </span>
                       <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-[11px] font-black text-emerald-500">Vigente</span>
@@ -307,7 +325,7 @@ function ExploradorSectores() {
                         {historicas.map((n, i) => (
                           <li key={n.norma} style={retraso(i)} className="norm-slide flex flex-wrap items-start justify-between gap-2">
                             <span className="min-w-0">
-                              <span className="block text-sm font-semibold text-muted">{n.norma}</span>
+                              <NormaEnlace n={n} className="text-sm font-semibold text-muted" />
                               <span className="block text-xs text-muted/80">{n.tema}</span>
                             </span>
                             <span className="rounded-full bg-line/10 px-2.5 py-0.5 text-[11px] font-bold text-muted">Histórica</span>

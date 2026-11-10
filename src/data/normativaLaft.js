@@ -16,6 +16,7 @@ export const FUENTES_BASE = [
 ];
 
 // estado: "vigente" | "historica". Las vigentes se muestran primero.
+// url: enlace oficial; directo=true abre el documento, false lleva a la página del regulador donde está publicado.
 export const SECTORES = [
   {
     id: "real",
@@ -30,10 +31,14 @@ export const SECTORES = [
     novedad:
       "La nueva Circular Básica Jurídica integra en un solo sistema de autocontrol la gestión del riesgo LA/FT/FPADM (SAGRILAFT) y la de corrupción y soborno transnacional (PTEE).",
     normas: [
-      { norma: "Circular Externa 100-000020 de 2026", tema: "Nueva Circular Básica Jurídica: SAGRILAFT y PTEE integrados", estado: "vigente" },
-      { norma: "Circular Externa 100-000011 de 2021", tema: "PTEE, Capítulo XIII de la circular anterior", estado: "historica" },
-      { norma: "Circular Externa 100-000004 de 2021", tema: "Modificó el SAGRILAFT del Capítulo X", estado: "historica" },
-      { norma: "Circular Externa 100-000016 de 2020", tema: "SAGRILAFT, Capítulo X de la circular anterior", estado: "historica" },
+      { norma: "Circular Externa 100-000020 de 2026", tema: "Nueva Circular Básica Jurídica: une SAGRILAFT y PTEE en un solo sistema (Capítulo IX)", estado: "vigente", url: "https://www.supersociedades.gov.co/documents/107391/9735612/Circular+Externa+100-000020+de+2+de+julio+de+2026.pdf/9a2064f8-9aa9-51fa-2d8f-235863681e0d", directo: true },
+      { norma: "Circular Externa 100-300000 de 2024", tema: "Ajustó el SAGRILAFT y el PTEE para cámaras de comercio y ESAL extranjeras", estado: "historica", url: "https://www.supersociedades.gov.co/documents/107391/7114590/Circular+Externa+100-300000+de+6+de+diciembre+de+2024.pdf/b360e08b-e5af-d5db-c7f2-1c7ac7e6782d", directo: true },
+      { norma: "Circular Externa 100-000003 de 2024", tema: "Cambió los plazos del SAGRILAFT y el PTEE para cámaras de comercio y ESAL extranjeras", estado: "historica", url: "https://www.supersociedades.gov.co/documents/107391/7114590/Circular+Externa+100-000003+de+23+de+abril+de+2024.pdf/2357e354-85fd-7edc-dc54-f2ba1a3975d6", directo: true },
+      { norma: "Circular Externa 100-000004 de 2023", tema: "Modificó los plazos de implementación del SAGRILAFT y el PTEE", estado: "historica", url: "https://www.supersociedades.gov.co/documents/107391/6026893/Circular+Externa+100-000004+de+4+de+octubre+de+2023.pdf/cfd832d1-5570-145b-5773-cd28c04ec56b?t=1696537036475", directo: true },
+      { norma: "Circular Externa 100-000015 de 2021", tema: "Cambió las definiciones de beneficiario final y PEP, y agregó a los asociados cercanos", estado: "historica", url: "https://www.supersociedades.gov.co/documents/80312/6645658/Circular-Externa-100-000015-de-24-12-2021.pdf", directo: true },
+      { norma: "Circular Externa 100-000011 de 2021", tema: "Creó el PTEE (Capítulo XIII de la circular anterior)", estado: "historica", url: "https://www.supersociedades.gov.co/documents/80312/6646217/Circular-Externa-100-000011-de-09-08-2021.pdf", directo: true },
+      { norma: "Circular Externa 100-000004 de 2021", tema: "Ajustó varios numerales del SAGRILAFT (Capítulo X)", estado: "historica", url: "https://www.supersociedades.gov.co/documents/80312/6645658/Circular-Externa-100-000004-de-09-04-2021.pdf", directo: true },
+      { norma: "Circular Externa 100-000016 de 2020", tema: "Reformó todo el SAGRILAFT (Capítulo X de la circular anterior)", estado: "historica", url: "https://www.supersociedades.gov.co/documents/80312/6645658/Circular-Externa-100-000016-de-24-12-2020.pdf", directo: true },
     ],
     exige: [
       "Oficial de cumplimiento principal y suplente",
@@ -58,9 +63,10 @@ export const SECTORES = [
     novedad:
       "En junio de 2025 la Superfinanciera reexpidió su Circular Básica Jurídica para depurar y reorganizar la regulación; el SARLAFT sigue siendo el sistema exigido a sus vigilados.",
     normas: [
-      { norma: "Circular Externa 006 de 2025", tema: "Reexpide la Circular Básica Jurídica", estado: "vigente" },
-      { norma: "Circular Externa 027 de 2020", tema: "Actualizó las instrucciones del SARLAFT", estado: "historica" },
-      { norma: "Circular Externa 029 de 2014", tema: "Circular Básica Jurídica anterior", estado: "historica" },
+      { norma: "Circular Externa 006 de 2025", tema: "Reexpide la Circular Básica Jurídica; el SARLAFT está en la Parte I, Título IV, Capítulo IV", estado: "vigente", url: "https://www.superfinanciera.gov.co/loader.php?lServicio=Tools2&lTipo=descargas&lFuncion=descargar&idFile=1076572", directo: true },
+      { norma: "Circular Externa 010 de 2025", tema: "No se pueden negar productos solo por antecedentes penales: hay que analizar el riesgo LA/FT de cada persona y explicar la negativa", estado: "vigente", url: "https://www.superfinanciera.gov.co/loader.php?lServicio=Tools2&lTipo=descargas&lFuncion=descargar&idFile=1077888", directo: true },
+      { norma: "Circular Externa 027 de 2020", tema: "Actualizó las instrucciones del SARLAFT", estado: "historica", url: "https://www.superfinanciera.gov.co/loader.php?lServicio=Tools2&lTipo=descargas&lFuncion=descargar&idFile=1047594", directo: true },
+      { norma: "Circular Externa 029 de 2014", tema: "Circular Básica Jurídica anterior (reemplazada por la 006 de 2025)", estado: "historica", url: "https://www.superfinanciera.gov.co/loader.php?lServicio=Tools2&lTipo=descargas&lFuncion=descargar&idFile=1010066", directo: true },
     ],
     exige: [
       "Etapas: identificación, medición, control y monitoreo",
@@ -83,7 +89,13 @@ export const SECTORES = [
     sistemas: ["SARLAFT"],
     instrumento: "Circular Básica Jurídica de la Supersolidaria, Título V",
     normas: [
-      { norma: "Circular Básica Jurídica, Título V", tema: "SARLAFT para las organizaciones solidarias", estado: "vigente" },
+      { norma: "Circular Externa 20 de 2020", tema: "Circular Básica Jurídica; su Título V regula el SARLAFT", estado: "vigente", url: "https://www.supersolidaria.gov.co/sites/default/files/data/circular_externa_20_del_18_12_2020_0.pdf", directo: true },
+      { norma: "Circular Externa 32 de 2021", tema: "Modifica parcialmente el Título V (SARLAFT)", estado: "vigente", url: "https://www.supersolidaria.gov.co/sites/default/files/data/circular_externa_32_sarlaft_0.pdf", directo: true },
+      { norma: "Circular Externa 38 de 2022", tema: "Nuevas modificaciones al Título V (SARLAFT)", estado: "vigente", url: "https://www.supersolidaria.gov.co/sites/default/files/data/circular_externa-38-sarlaft_0.pdf", directo: true },
+      { norma: "Circular Externa 70 de 2024", tema: "Actualiza los anexos del Título V: reporte de operaciones sospechosas y formato de vinculación", estado: "vigente", url: "https://www.supersolidaria.gov.co/sites/default/files/data/20240212_plantilla_circ_70.pdf", directo: true },
+      { norma: "Circular Externa 14 de 2018", tema: "Compiló las instrucciones del SARLAFT en el Capítulo XVII del Título V de la circular anterior", estado: "historica", url: "https://www.supersolidaria.gov.co/sites/default/files/normativa/circular_externa_14_del_12_de_dic_2018_0.pdf", directo: true },
+      { norma: "Circular Externa 10 de 2017", tema: "Amplió los plazos para implementar la Circular Externa 04 de 2017", estado: "historica", url: "https://www.supersolidaria.gov.co/sites/default/files/normativa/circular_externa-10_del_31_julio_2017_modificacion_plazo_implementacion_sarlaft_1_0.pdf", directo: true },
+      { norma: "Circular Externa 04 de 2017", tema: "Primeras instrucciones del SARLAFT para las organizaciones solidarias", estado: "historica", url: "https://www.supersolidaria.gov.co/sites/default/files/normativa/circular_sarlaft_2017_0.pdf", directo: true },
     ],
     exige: [
       "SARLAFT proporcional al nivel de supervisión",
@@ -105,9 +117,9 @@ export const SECTORES = [
     sistemas: ["SARLAFT", "SICOF", "PTEE"],
     instrumento: "Circular Externa 009 de 2016 de la Supersalud y sus modificaciones",
     normas: [
-      { norma: "Circular Externa 20211700000005-5 de 2021", tema: "Modifica el SARLAFT e incorpora el SICOF", estado: "vigente" },
-      { norma: "Circular Externa 2022151000000053-5 de 2022", tema: "Programa de Transparencia y Ética (PTEE)", estado: "vigente" },
-      { norma: "Circular Externa 009 de 2016", tema: "Instrucciones originales del SARLAFT en salud", estado: "historica" },
+      { norma: "Circular Externa 20211700000005-5 de 2021", tema: "Reforma el SARLAFT del sector salud e incorpora el SICOF (anticorrupción y antifraude)", estado: "vigente", url: "https://normograma.supersalud.gov.co/compilacion/docs/circular_supersalud_0005_2021.htm", directo: true },
+      { norma: "Circular Externa 009 de 2016", tema: "Instrucciones base del SARLAFT en salud, modificada por la 20211700000005-5 de 2021", estado: "vigente", url: "https://normograma.supersalud.gov.co/compilacion/docs/circular_supersalud_0009_2016.htm", directo: true },
+      { norma: "Circular Externa 2022151000000053-5 de 2022", tema: "Programa de Transparencia y Ética Empresarial (PTEE)", estado: "vigente", url: "https://normograma.supersalud.gov.co/compilacion/docs/circular_supersalud_0053_2022.htm", directo: true },
     ],
     exige: [
       "SARLAFT dentro del Sistema Integrado de Gestión de Riesgos",
@@ -130,9 +142,13 @@ export const SECTORES = [
     novedad:
       "En 2025 la Supertransporte eliminó el antiguo SIPLAFT y adoptó un SARLAFT con oficial de cumplimiento, debida diligencia intensificada para PEP y reporte de la ausencia de operaciones sospechosas.",
     normas: [
-      { norma: "Resolución 2328 de 2025", tema: "Adopta el SARLAFT y elimina el SIPLAFT", estado: "vigente" },
-      { norma: "Resolución 14673 de 2025", tema: "Programa de Transparencia y Ética (PTEE)", estado: "vigente" },
-      { norma: "Resolución 74854 de 2016", tema: "SIPLAFT del transporte de carga", estado: "historica" },
+      { norma: "Resolución 2328 de 2025", tema: "Adopta el SARLAFT en la Circular Única de Infraestructura y Transporte y elimina el SIPLAFT", estado: "vigente", url: "https://www.supertransporte.gov.co/documentos/2025/marzo/Notificaciones_07_RG/2328.pdf", directo: true },
+      { norma: "Resolución 16615 de 2025", tema: "Ajusta quiénes están obligados al SARLAFT y el reporte de operaciones sospechosas", estado: "vigente", url: "https://www.supertransporte.gov.co/documentos/2025/noviembre/Administrativa_05/Resolucion_16615_del_05_de_noviembre_de_2025.pdf", directo: true },
+      { norma: "Resolución 4607 de 2026", tema: "Crea el Régimen de Medidas Simplificadas (RMS) y exige oficial de cumplimiento suplente certificado", estado: "vigente", url: "https://www.supertransporte.gov.co/documentos/2026/Abril/Planeaci%C3%B3n_10/4607.pdf", directo: true },
+      { norma: "Circular Externa 20265330000054 de 2026", tema: "Política de supervisión del SARLAFT y del RMS (modificada por las circulares 20265330000134 y 20265330000164 de 2026)", estado: "vigente", url: "https://www.supertransporte.gov.co/documentos/2026/Mayo/Planeacion_06/20265330000054.pdf", directo: true },
+      { norma: "Resolución 14673 de 2025", tema: "Programa de Transparencia y Ética Empresarial (PTEE)", estado: "vigente", url: "https://www.supertransporte.gov.co/documentos/2025/septiembre/Juridica_19/14673-2025.pdf", directo: true },
+      { norma: "Resolución 7038 de 2026", tema: "Modifica el PTEE y amplía su plazo de transición hasta el 18 de agosto de 2026", estado: "vigente", url: "https://www.supertransporte.gov.co/documentos/2026/Mayo/Planeaci%C3%B3n_22/65255260bda2e4.719468587038.pdf", directo: true },
+      { norma: "Resolución 74854 de 2016", tema: "SIPLAFT del transporte de carga (derogada por la 2328 de 2025)", estado: "historica", url: "https://uiaf.gov.co/sites/default/files/inline-images/PF%20Resolucion%2074854%20de%202016.pdf", directo: true },
     ],
     exige: [
       "Oficial de cumplimiento y manual SARLAFT",
@@ -153,9 +169,15 @@ export const SECTORES = [
     sistemas: ["SARLAFT", "PTEE"],
     instrumento: "Circulares externas de la Supervigilancia (SARLAFT 2.0)",
     normas: [
-      { norma: "Circular Externa 20240000245 de 2024", tema: "SARLAFT 2.0", estado: "vigente" },
-      { norma: "Circular Externa 20251000000035CS de 2025", tema: "Programa de Transparencia y Ética (PTEE)", estado: "vigente" },
-      { norma: "SIPLAFT", tema: "Sistema de prevención usado antes en el sector", estado: "historica" },
+      { norma: "Circular Externa 20240000245 de 2024", tema: "SARLAFT 2.0 para los servicios de vigilancia y seguridad privada", estado: "vigente", url: "https://www.supervigilancia.gov.co/web/content/2027?unique=0ac55e12ba925539b96edccc3f54c6b514f24f2a&download=true", directo: true },
+      { norma: "Circular Externa 20240000275 de 2024", tema: "Modifica algunos numerales del SARLAFT 2.0", estado: "vigente", url: "https://www.supervigilancia.gov.co/web/content/2050?unique=8f1e3015a42ca39d45d1ec476ce48024f12adfb3&download=true", directo: true },
+      { norma: "Circular 20241300000035 de 2024", tema: "Política de supervisión del riesgo LA/FT/FP (SARLAFT 2.0)", estado: "vigente", url: "https://www.supervigilancia.gov.co/web/content/2049?unique=fdf597b3c4f69317a39c7608f559b3557933f3a2&download=true", directo: true },
+      { norma: "Circular 20261200000045CS de 2026", tema: "Protocolo metodológico de la matriz de riesgos LA/FT/FP", estado: "vigente", url: "https://www.supervigilancia.gov.co/web/content/12769?unique=4a012803d98282d554bc7deeeda0a0ff6944a37b&download=true", directo: true },
+      { norma: "Circular Externa 20251000000035CS de 2025", tema: "Programa de Transparencia y Ética Empresarial (PTEE)", estado: "vigente", url: "https://www.supervigilancia.gov.co/web/content/12087?download=true", directo: true },
+      { norma: "Circular Externa 20261200000055CS de 2026", tema: "Política de supervisión del PTEE", estado: "vigente", url: "https://www.supervigilancia.gov.co/web/content/12097?download=true", directo: true },
+      { norma: "Circular Externa 008 de 2011", tema: "SARLAFT anterior del sector (derogada por la 20240000245 de 2024)", estado: "historica", url: "https://normativa.colpensiones.gov.co/colpens/docs/circular_supervigilancia_0008_2011.htm", directo: true },
+      { norma: "Circular Externa 465 de 2017", tema: "Complementó la 008 de 2011 en el control del riesgo LA/FT (derogada)", estado: "historica", url: "https://sidn.ramajudicial.gov.co/SIDN/NORMATIVA/TEXTOS_COMPLETOS/4_CIRCULARES/CIRCULARES%202017/SVSP%20Circular%20Externa%20465%20de%202017%20(Control%20al%20riesgo%20de%20lavado%20de%20activos%20y%20financiaci%C3%B3n%20al%20terrorismo).pdf", directo: true },
+      { norma: "Circular Externa 045 de 2018", tema: "Extendió el SARLAFT a las arrendadoras de vehículos blindados (derogada)", estado: "historica", url: null, directo: false },
     ],
     exige: [
       "SARLAFT proporcional al tamaño del servicio",
@@ -173,11 +195,12 @@ export const SECTORES = [
     sigla: "Coljuegos",
     url: "https://www.coljuegos.gov.co",
     color: "orange",
-    sistemas: ["SARLAFT"],
-    instrumento: "Resoluciones de Coljuegos sobre SARLAFT",
+    sistemas: ["SIPLAFT"],
+    instrumento: "Resoluciones de Coljuegos sobre SIPLAFT",
     normas: [
-      { norma: "Resolución 202115000012784 de 2021", tema: "Modifica las instrucciones del SARLAFT", estado: "vigente" },
-      { norma: "Resolución 20195100044514 de 2019", tema: "Instrucciones del SARLAFT para operadores", estado: "vigente" },
+      { norma: "Resolución 20195100044514 de 2019", tema: "Requisitos del SIPLAFT para los operadores con contrato de concesión", estado: "vigente", url: "https://www.coljuegos.gov.co/loader.php?lServicio=Tools2&lTipo=descargas&lFuncion=descargar&idFile=248922", directo: true },
+      { norma: "Resolución 20215000012784 de 2021", tema: "Modifica la de 2019: definiciones de PEP y organizaciones internacionales", estado: "vigente", url: "https://www.coljuegos.gov.co/loader.php?lServicio=Tools2&lTipo=descargas&lFuncion=descargar&idFile=251083", directo: true },
+      { norma: "Resolución 20161200032334 de 2016", tema: "SIPLAFT anterior de Coljuegos (derogada por la de 2019)", estado: "historica", url: "https://www.coljuegos.gov.co/documentos/200342/normatividad-siplaft/", directo: false },
     ],
     exige: [
       "Identificación de jugadores y premios",
@@ -200,8 +223,9 @@ export const SECTORES = [
     novedad:
       "A las entidades públicas no les aplican el SARLAFT ni el SAGRILAFT. Gestionan el riesgo de LA/FT dentro del SIGRIP, junto con la corrupción, el soborno, el fraude y los conflictos de interés.",
     normas: [
-      { norma: "Decreto 1122 de 2024", tema: "Lineamientos del SIGRIP y del PTEP", estado: "vigente" },
-      { norma: "Ley 2195 de 2022", tema: "Ley de transparencia y lucha contra la corrupción", estado: "vigente" },
+      { norma: "Decreto 1122 de 2024", tema: "Reglamenta los Programas de Transparencia y Ética Pública (PTEP)", estado: "vigente", url: "https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=250176", directo: true },
+      { norma: "Ley 2195 de 2022", tema: "Transparencia y lucha contra la corrupción; su artículo 31 crea el PTEP", estado: "vigente", url: "https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=175606", directo: true },
+      { norma: "Ley 1474 de 2011", tema: "Estatuto Anticorrupción; norma base del PTEP (artículo 73)", estado: "vigente", url: "https://www.funcionpublica.gov.co/eva/gestornormativo/norma.php?i=43292", directo: true },
     ],
     exige: [
       "Programa de Transparencia y Ética Pública (PTEP)",
@@ -480,7 +504,7 @@ export const LINEA_TIEMPO = [
   { anio: "2021", norma: "Decreto 830", texto: "Actualiza el régimen de Personas Expuestas Políticamente (PEP)." },
   { anio: "2021", norma: "Resolución DIAN 000164", texto: "Crea el Registro Único de Beneficiarios Finales (RUB)." },
   { anio: "2022", norma: "Ley 2195", texto: "Transparencia y lucha contra la corrupción; refuerza el beneficiario final." },
-  { anio: "2024", norma: "Decreto 1122", texto: "Lineamientos de transparencia e integridad para las entidades públicas (SIGRIP y PTEP)." },
+  { anio: "2024", norma: "Decreto 1122", texto: "Reglamenta los Programas de Transparencia y Ética Pública (PTEP) de las entidades públicas." },
   { anio: "2025", norma: "SFC CE 006", texto: "La Superfinanciera reexpide su Circular Básica Jurídica." },
   { anio: "2025", norma: "Supertransporte Res. 2328", texto: "El sector transporte pasa del SIPLAFT al SARLAFT." },
   { anio: "2026", norma: "Supersociedades CE 100-000020", texto: "Nueva Circular Básica Jurídica: SAGRILAFT y PTEE en un solo sistema." },

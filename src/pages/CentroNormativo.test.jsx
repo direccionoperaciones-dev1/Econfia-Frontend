@@ -14,11 +14,33 @@ describe("Centro normativo", () => {
     expect(screen.getByText("Superintendencia de Transporte")).toBeInTheDocument();
   });
 
+  it("enlaza cada circular, vigente e histórica, a su fuente oficial en pestaña nueva", () => {
+    render(<CentroNormativo />);
+    const vigente = screen.getByRole("link", { name: /Circular Externa 100-000020 de 2026/ });
+    expect(vigente).toHaveAttribute("href", expect.stringContaining("supersociedades.gov.co/documents/"));
+    expect(vigente).toHaveAttribute("target", "_blank");
+    expect(vigente).toHaveAttribute("rel", "noopener noreferrer");
+
+    fireEvent.click(screen.getByRole("button", { name: /Ver historial/ }));
+    const historica = screen.getByRole("link", { name: /Circular Externa 100-000016 de 2020/ });
+    expect(historica).toHaveAttribute("href", expect.stringContaining("Circular-Externa-100-000016"));
+  });
+
+  it("muestra la cadena del SARLAFT solidario con su historial", () => {
+    render(<CentroNormativo />);
+    fireEvent.click(screen.getByRole("tab", { name: /Sector solidario/ }));
+    expect(screen.getByRole("link", { name: /Circular Externa 20 de 2020/ })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Circular Externa 70 de 2024/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Ver historial \(3\)/ }));
+    expect(screen.getByRole("link", { name: /Circular Externa 04 de 2017/ })).toHaveAttribute(
+      "href", expect.stringContaining("supersolidaria.gov.co"));
+  });
+
   it("muestra vigentes primero, el historial al pedirlo y las fuentes del sector", () => {
     render(<CentroNormativo />);
     fireEvent.click(screen.getByRole("tab", { name: /Sector transporte/ }));
     expect(screen.getByText("Ente regulador")).toBeInTheDocument();
-    expect(screen.getByText(/Circular Única de Infraestructura y Transporte/)).toBeInTheDocument();
+    expect(screen.getByText("Circular Única de Infraestructura y Transporte, Título V, Capítulo 6")).toBeInTheDocument();
     expect(screen.queryByText("Resolución 74854 de 2016")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /Ver historial \(1\)/ }));
     expect(screen.getByText("Resolución 74854 de 2016")).toBeInTheDocument();
