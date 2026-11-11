@@ -30,7 +30,7 @@ export function DatosEmpresaCompartidos({ empresa, publico = false }) {
   );
 }
 
-export function DocumentosEmpresa({ documentos = [], onEliminar, publico = false }) {
+export function DocumentosEmpresa({ documentos = [], onEliminar, publico = false, verArchivo = true }) {
   const muted = publico ? "text-slate-400" : "text-muted";
   const border = publico ? "border-white/10" : "border-line/15";
   if (!documentos.length) return <p className={`text-sm ${muted}`}>Sin documentos.</p>;
@@ -48,7 +48,7 @@ export function DocumentosEmpresa({ documentos = [], onEliminar, publico = false
             </div>
             <div className="flex flex-wrap items-center gap-3 text-xs">
               <span className={d.estado_verificacion === "verificado" ? "text-emerald-400" : d.estado_verificacion === "rechazado" ? "text-red-400" : muted}>{d.estado_label}</span>
-              {d.archivo_url && <a href={d.archivo_url} target="_blank" rel="noreferrer" className="text-emerald-400 underline">Ver documento</a>}
+              {verArchivo && d.archivo_url && <a href={d.archivo_url} target="_blank" rel="noreferrer" className="text-emerald-400 underline">Ver documento</a>}
               {onEliminar && <button type="button" onClick={() => onEliminar(d.id)} className="text-red-400">Eliminar</button>}
             </div>
           </li>)}

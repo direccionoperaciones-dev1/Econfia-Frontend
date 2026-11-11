@@ -29,6 +29,31 @@ function badgeClasses(estado) {
   return "bg-surface-2/70 text-muted border-line/15";
 }
 
+// Espejo de PERMISOS (ECONFIA-BACKEND/core/wallet_equipo.py). Solo se usa si el
+// backend no envía `permisos` en /estado/; el servidor sigue siendo quien valida.
+const TODOS_PERMISOS = [
+  "datos_ver", "datos_editar", "doc_ver", "doc_subir", "doc_eliminar", "doc_descargar",
+  "solicitar", "consultar", "ver_compartidas", "descargar_compartido", "compartir",
+  "equipo_gestionar", "actividad_ver",
+];
+const PERMISOS_ROL = {
+  admin: TODOS_PERMISOS,
+  rrhh: ["datos_ver", "doc_ver", "doc_subir", "doc_eliminar", "doc_descargar",
+    "solicitar", "consultar", "ver_compartidas", "descargar_compartido"],
+  reclutador: ["datos_ver", "doc_ver", "solicitar", "consultar", "ver_compartidas", "descargar_compartido"],
+  analista: ["datos_ver", "doc_ver", "consultar", "ver_compartidas", "descargar_compartido"],
+  consulta: ["datos_ver", "doc_ver", "ver_compartidas"],
+  auditor: ["datos_ver", "actividad_ver"],
+};
+
+// Permisos del usuario según /estado/: lista explícita del servidor, o el rol
+// contra la matriz espejo. Sin rol (backend previo a Fase 5) = dueño → admin.
+function permisosDe(data) {
+  if (Array.isArray(data?.permisos)) return new Set(data.permisos);
+  if (data?.mi_rol) return new Set(PERMISOS_ROL[data.mi_rol] || []);
+  return new Set(TODOS_PERMISOS);
+}
+
 const EMP_VACIA = {
   nombre_comercial: "", digito_verificacion: "", ciiu: "", actividad_economica: "",
   logo_url: "", tamano: "", sector: "", fecha_constitucion: "",
@@ -96,6 +121,11 @@ export default function EconfiaWalletEmpresa() {
   const [llaveInput, setLlaveInput] = useState("");
   const [guardandoLlave, setGuardandoLlave] = useState(false);
   const [editandoLlave, setEditandoLlave] = useState(false);
+  // Rol del usuario en la empresa (Fase 5) → qué controles se muestran.
+  const [miRol, setMiRol] = useState(null);
+  // null hasta que /estado/ responde: no se muestra ni se carga nada por adelantado.
+  const [permisos, setPermisos] = useState(null);
+  const puede = (accion) => Boolean(permisos?.has(accion));
 
   const actualizarLogo = async (archivoLogo) => {
     setSubiendoLogo(true);
@@ -136,6 +166,8 @@ export default function EconfiaWalletEmpresa() {
         setDocumentos(data.documentos || []);
         setTiposDoc(data.tipos_documento || []);
         setPrecargado(Boolean(data.empresa?.precargado_camara));
+        setMiRol(data.mi_rol || null);
+        setPermisos(permisosDe(data));
       } else {
         setToast({ type: "error", message: data.error || "No se pudo cargar la empresa." });
       }
@@ -387,7 +419,9 @@ export default function EconfiaWalletEmpresa() {
     }
   };
 
-  useEffect(() => { cargarLlaveFija(); }, [cargarLlaveFija]);
+  // La llave fija es de la cuenta propia: solo tiene sentido para quien comparte.
+  const puedeCompartir = puede("compartir");
+  useEffect(() => { if (puedeCompartir) cargarLlaveFija(); }, [cargarLlaveFija, puedeCompartir]);
 
   // Vuelca los datos traídos (Cámara local o RUES) sobre el formulario sin
   // pisar lo que el usuario ya haya escrito con valores vacíos.
@@ -669,21 +703,27 @@ export default function EconfiaWalletEmpresa() {
           >
             <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
               <h2 className="text-lg font-bold text-content">Datos de la empresa</h2>
-              <button
+              {puede("datos_editar") && <button
                 type="button"
                 onClick={traerDeCamara}
                 disabled={precargando}
                 className="px-3 py-2 rounded-lg text-xs font-semibold border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/15 transition-all disabled:opacity-60"
               >
                 {precargando ? "Buscando…" : "⤓ Traer de Cámara de Comercio"}
-              </button>
+              </button>}
             </div>
+            {!puede("datos_editar") && (
+              <p className="text-xs text-muted mb-4">
+                Tu rol{miRol ? ` (${miRol})` : ""} solo permite ver estos datos; los edita el Administrador.
+              </p>
+            )}
             {precargado && (
               <p className="text-xs text-emerald-300/80 mb-4">
                 ✓ Algunos datos se precargaron desde RUES/Cámara de Comercio. Revísalos y corrige lo que necesites.
               </p>
             )}
 
+            <fieldset disabled={!puede("datos_editar")} className="min-w-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <Campo {...campoProps} k="razon_social" label="Razón social *" />
               <Campo {...campoProps} k="nombre_comercial" label="Nombre comercial" />
@@ -730,8 +770,9 @@ export default function EconfiaWalletEmpresa() {
               </div>
               <Campo {...campoProps} k="rep_num_doc" label="Número de documento" />
             </div>
+            </fieldset>
 
-            <div className="mt-5 flex justify-end">
+            {puede("datos_editar") && <div className="mt-5 flex justify-end">
               <button
                 type="submit"
                 disabled={guardando}
@@ -739,25 +780,27 @@ export default function EconfiaWalletEmpresa() {
               >
                 {guardando ? "Guardando…" : "Guardar datos"}
               </button>
-            </div>
+            </div>}
           </form>
 
-          <section className="bg-surface border border-line/15 rounded-2xl p-6">
+          {(puede("datos_editar") || emp.logo_url) && <section className="bg-surface border border-line/15 rounded-2xl p-6">
             <h2 className="text-lg font-bold text-content mb-3">Logo de la empresa</h2>
             {emp.logo_url && <img src={emp.logo_url} alt="Logo actual de la empresa" className="w-24 h-24 object-contain rounded-xl bg-white mb-3" />}
+            {puede("datos_editar") && <>
             <label className="block text-sm text-muted mb-2" htmlFor="empresa-logo">PNG, JPG o WEBP · máximo 2 MB y 4096 × 4096 píxeles</label>
             <input id="empresa-logo" type="file" accept=".png,.jpg,.jpeg,.webp" disabled={subiendoLogo}
               className="w-full text-sm text-content"
               onChange={(e) => { const file = e.target.files?.[0]; if (file) actualizarLogo(file); e.target.value = ""; }} />
             {subiendoLogo && <p role="status" className="text-sm text-muted mt-2">Actualizando logo…</p>}
             {emp.logo_url && <button type="button" disabled={subiendoLogo} onClick={() => actualizarLogo(null)} className="text-sm text-red-400 mt-3 disabled:opacity-50">Quitar logo</button>}
-          </section>
+            </>}
+          </section>}
 
           {/* ── Bloque 3: Documentos de la empresa ── */}
-          <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
+          {puede("doc_ver") && <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
             <h2 className="text-lg font-bold text-content mb-4">Documentos de la empresa</h2>
 
-            <form onSubmit={subirDocumento} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 mb-5">
+            {puede("doc_subir") && <form onSubmit={subirDocumento} className="flex flex-col sm:flex-row items-stretch sm:items-end gap-3 mb-5">
               <div className="flex-1">
                 <label className={labelCls}>Tipo de documento</label>
                 <select className={inputCls} value={tipoDocSel} onChange={(e) => setTipoDocSel(e.target.value)}>
@@ -786,13 +829,15 @@ export default function EconfiaWalletEmpresa() {
               >
                 {subiendo ? "Subiendo…" : "Subir"}
               </button>
-            </form>
+            </form>}
 
-            <DocumentosEmpresa documentos={documentos} onEliminar={eliminarDocumento} />
-          </div>
+            <DocumentosEmpresa documentos={documentos}
+              onEliminar={puede("doc_eliminar") ? eliminarDocumento : undefined}
+              verArchivo={puede("doc_descargar")} />
+          </div>}
 
           {/* ── Esquemas publicados que la empresa puede completar ── */}
-          <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
+          {puede("datos_editar") && <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
             <h2 className="text-lg font-bold text-content mb-1">Credenciales disponibles</h2>
             <p className="text-xs text-muted mb-4">
               Plantillas publicadas por la entidad. Se completan con los datos que ya tiene tu wallet empresa; si falta algo, puedes llenarlo antes de generar.
@@ -876,7 +921,7 @@ export default function EconfiaWalletEmpresa() {
                 </div>
               </div>
             )}
-          </div>
+          </div>}
 
           {/* ── Credenciales emitidas a la empresa ── */}
           <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
@@ -926,7 +971,7 @@ export default function EconfiaWalletEmpresa() {
           </div>
 
           {/* ── Mi llave fija (handle propio de la empresa) ── */}
-          <div className="bg-gradient-to-br from-emerald-500/10 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-emerald-500/25 shadow-2xl shadow-emerald-500/10 p-6">
+          {puede("compartir") && <div className="bg-gradient-to-br from-emerald-500/10 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-emerald-500/25 shadow-2xl shadow-emerald-500/10 p-6">
             <h2 className="text-lg font-bold text-content mb-1">Mi llave</h2>
             <p className="text-xs text-muted mb-4 leading-relaxed">
               Es el identificador propio de tu empresa para que un tercero consulte tu wallet. Elige una de las
@@ -979,10 +1024,10 @@ export default function EconfiaWalletEmpresa() {
                 Completa el NIT y la razón social de tu empresa para poder sugerirte una llave.
               </p>
             )}
-          </div>
+          </div>}
 
           {/* ── Compartir mi wallet de empresa ── */}
-          <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
+          {puede("compartir") && <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
             <h2 className="text-lg font-bold text-content mb-1">Compartir mi wallet</h2>
             <p className="text-xs text-muted mb-4">
               Genera una llave para que un tercero (otra empresa o persona) vea los datos que elijas de tu empresa.
@@ -1002,11 +1047,13 @@ export default function EconfiaWalletEmpresa() {
             >
               {compartiendo ? "Generando…" : "Generar llave para compartir"}
             </button>
-          </div>
+          </div>}
 
           {/* ── Consultar Wallet (verificar persona/empresa por llave) ── */}
-          <WalletSolicitudes empresa onActualizado={cargarCompartidas} />
-          <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
+          {puede("ver_compartidas") && (
+            <WalletSolicitudes empresa puedeSolicitar={puede("solicitar")} onActualizado={cargarCompartidas} />
+          )}
+          {puede("consultar") && <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
             <h2 className="text-lg font-bold text-content mb-1">Consultar Wallet</h2>
             <p className="text-xs text-muted mb-4">
               Ingresa la llave <span className="font-mono">WLT-XXXX-XXXX</span> que una persona o empresa te compartió para ver los datos que autorizó.
@@ -1069,10 +1116,10 @@ export default function EconfiaWalletEmpresa() {
                 )}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* ── Wallets compartidas conmigo ── */}
-          <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
+          {puede("ver_compartidas") && <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
             <h2 className="text-lg font-bold text-content mb-4">Wallets compartidas conmigo</h2>
             {compartidas.length === 0 ? (
               <p className="text-sm text-muted text-center py-4">Aún no tienes wallets compartidas ni solicitudes autorizadas.</p>
@@ -1090,7 +1137,7 @@ export default function EconfiaWalletEmpresa() {
                       <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${c.vigente ? "bg-green-500/15 text-green-300 border-green-500/30" : "bg-surface-2/70 text-muted border-line/15"}`}>
                         {c.vigente ? "Vigente" : c.estado === "revocada" ? "Revocada" : "Expirada"}
                       </span>
-                      {c.vigente && (
+                      {c.vigente && puede("consultar") && (
                         <button
                           onClick={() => { setConsultarClave(c.clave); consultarPorClave(c.clave); }}
                           className="text-xs font-semibold text-emerald-300 hover:text-emerald-200"
@@ -1101,7 +1148,7 @@ export default function EconfiaWalletEmpresa() {
                 ))}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* ── Equipo (Fase 5) ── */}
           {equipo && (
@@ -1163,7 +1210,7 @@ export default function EconfiaWalletEmpresa() {
           )}
 
           {/* ── Actividad (Fase 5) ── */}
-          {equipo && (equipo.mi_rol === "admin" || equipo.mi_rol === "auditor") && (
+          {equipo && puede("actividad_ver") && (
             <div className="bg-gradient-to-br from-surface/95 via-surface-2/80 to-surface/95 backdrop-blur-xl rounded-[20px] border border-line/15 shadow-2xl shadow-emerald-500/10 p-6">
               <h2 className="text-lg font-bold text-content mb-4">Actividad</h2>
               {actividad.length === 0 ? (

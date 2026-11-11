@@ -13,7 +13,9 @@ const ESTADOS = { pendiente: "Pendiente", autorizada: "Autorizada", rechazada: "
 const input = "w-full rounded-lg border border-line/15 bg-surface-2 px-3 py-2 text-content text-sm";
 const boton = "rounded-lg bg-brand px-4 py-2 text-white text-sm font-semibold disabled:opacity-50";
 
-export default function WalletSolicitudes({ empresa = false, onActualizado }) {
+// `puedeSolicitar` (solo empresa): el rol tiene el permiso "solicitar" para
+// crear y cancelar solicitudes; sin él la sección queda en solo lectura.
+export default function WalletSolicitudes({ empresa = false, puedeSolicitar = true, onActualizado }) {
   const [solicitudes, setSolicitudes] = useState([]);
   const [tipos, setTipos] = useState([]);
   const [disponibles, setDisponibles] = useState({});
@@ -84,13 +86,13 @@ export default function WalletSolicitudes({ empresa = false, onActualizado }) {
 
   return <section className="rounded-2xl border border-line/15 bg-surface p-6 text-content">
     <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-      <h2 className="text-lg font-bold">{empresa ? "Solicitar documentos" : "Solicitudes recibidas"}</h2>
+      <h2 className="text-lg font-bold">{empresa ? (puedeSolicitar ? "Solicitar documentos" : "Solicitudes de documentos") : "Solicitudes recibidas"}</h2>
       <button type="button" disabled={ocupado || cargando} onClick={() => { cargar(); onActualizado?.(); }} className="text-sm text-brand disabled:opacity-50">Actualizar solicitudes</button>
     </div>
     <p className="text-sm text-muted mb-4">{empresa
       ? "Pide documentos a una persona registrada. Tiene 7 días para responder; si autoriza, tendrás 7 días de acceso a los archivos elegidos."
       : "Revisa qué empresa solicita tus documentos y para qué. Solo se compartirán los archivos que selecciones, durante 7 días."}</p>
-    {empresa && <form onSubmit={crear} className="space-y-3 mb-6">
+    {empresa && puedeSolicitar && <form onSubmit={crear} className="space-y-3 mb-6">
       <div><label htmlFor="solicitud-correo" className="text-sm">Correo de la persona</label>
         <input id="solicitud-correo" type="email" required maxLength={254} value={correo} onChange={(e) => setCorreo(e.target.value)} className={input} /></div>
       <div><label htmlFor="solicitud-motivo" className="text-sm">Motivo de la solicitud</label>
@@ -137,7 +139,7 @@ export default function WalletSolicitudes({ empresa = false, onActualizado }) {
               onClick={() => enviar(`${ruta}${s.codigo}/responder/`, { decision: "rechazar" }, "Solicitud rechazada.")}>Rechazar solicitud</button>
           </div>
         </form> : <ul className="text-sm text-muted space-y-1">{s.detalles.map((d) => <li key={d.id}>{d.label}{d.nombre_original && ` · ${d.nombre_original}`}</li>)}</ul>}
-        {empresa && s.estado === "pendiente" && <button type="button" disabled={ocupado} className="text-sm text-red-400"
+        {empresa && puedeSolicitar && s.estado === "pendiente" && <button type="button" disabled={ocupado} className="text-sm text-red-400"
           onClick={() => enviar(`${ruta}${s.codigo}/cancelar/`, {}, "Solicitud cancelada.")}>Cancelar solicitud</button>}
         {!empresa && s.estado === "autorizada" && <button type="button" disabled={ocupado} className="text-sm text-red-400"
           onClick={() => enviar(`${ruta}${s.codigo}/revocar/`, {}, "Acceso revocado.")}>Revocar acceso</button>}
