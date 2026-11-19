@@ -24,7 +24,8 @@ describe("experian utils", () => {
       id: 17,
       row_id: "experian-17",
       source: "experian",
-      tipo_consulta: "experian",
+      // El producto se muestra como "Econfia Adjudicator" en la tabla.
+      tipo_consulta: "Econfia Adjudicator",
       cedula: "123456789",
       nombre: "Kent",
       estado: "completado",

@@ -113,7 +113,7 @@ describe("ExperianDetalleResultados", () => {
     it("muestra el spinner mientras la petición está en curso", () => {
       global.fetch = jest.fn(() => new Promise(() => {}));
       render(<ExperianDetalleResultados consultaId={21} />);
-      expect(screen.getByText(/cargando reporte experian/i)).toBeInTheDocument();
+      expect(screen.getByText(/cargando econfia adjudicator/i)).toBeInTheDocument();
     });
 
     it("muestra el error cuando la petición falla", async () => {

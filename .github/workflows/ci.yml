@@ -1,0 +1,79 @@
+# Integración continua del frontend de Econfia.
+# Corre en cada push / pull request a main (y a mano desde Actions).
+# Controles: pruebas automáticas, compilación de producción, vulnerabilidades
+# críticas en dependencias y búsqueda de secretos en los commits nuevos.
+# Ref.: Programa de Pruebas Previas al Despliegue SCS-SGSI-PRG-QA-001 (P-03, P-05).
+name: CI Frontend
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-frontend-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas-y-compilacion:
+    name: Pruebas y compilación
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - name: Pruebas automáticas
+        run: npx react-scripts test --watchAll=false
+        env:
+          CI: "true"
+      - name: Compilación de producción
+        run: npm run build
+        env:
+          CI: "false"  # los avisos de ESLint no detienen la compilación
+
+  dependencias:
+    name: Vulnerabilidades críticas (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Resumen de vulnerabilidades
+        run: |
+          echo "## npm audit (dependencias de producción)" >> "$GITHUB_STEP_SUMMARY"
+          npm audit --omit=dev 2>&1 | tail -5 >> "$GITHUB_STEP_SUMMARY" || true
+      - name: Bloquear si hay vulnerabilidades críticas
+        run: npm audit --omit=dev --audit-level=critical
+
+  secretos:
+    name: Búsqueda de secretos (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Instalar gitleaks
+        run: |
+          curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz | tar xz gitleaks
+          ./gitleaks version
+      - name: Revisar solo los commits nuevos
+        env:
+          EVENTO: ${{ github.event_name }}
+          ANTES: ${{ github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENTO" = "pull_request" ]; then RANGO="$BASE..$SHA";
+          elif [ "$EVENTO" = "push" ] && [ -n "$ANTES" ] && [ "$ANTES" != "0000000000000000000000000000000000000000" ]; then RANGO="$ANTES..$SHA";
+          else RANGO="-1"; fi
+          echo "Rango revisado: $RANGO"
+          ./gitleaks detect --source . --log-opts="$RANGO" --redact --verbose --exit-code 1

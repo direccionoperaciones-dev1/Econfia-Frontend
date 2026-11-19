@@ -1,0 +1,59 @@
+# Despliegue continuo del frontend de Econfia a producción.
+# Se lanza A MANO desde Actions ("Run workflow") y pasa por el ambiente
+# "produccion" (allí se configura quién lo aprueba). Solo despliega si el CI
+# del mismo commit está en verde.
+# Requiere los secretos del ambiente: DEPLOY_HOST, DEPLOY_USER y DEPLOY_SSH_KEY
+# (llave de despliegue dedicada, NO la llave personal de un administrador).
+name: CD Frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      motivo:
+        description: "Cambio que se despliega (ID del Registro de Gestión de Cambios)"
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: cd-frontend
+  cancel-in-progress: false
+
+jobs:
+  desplegar:
+    name: Desplegar a producción
+    runs-on: ubuntu-latest
+    environment: produccion
+    steps:
+      - name: Verificar que el CI del commit esté en verde
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          estado=$(gh run list -R "$GITHUB_REPOSITORY" --workflow "CI Frontend" --commit "$GITHUB_SHA" --json conclusion -q '.[0].conclusion')
+          echo "CI del commit $GITHUB_SHA: ${estado:-sin ejecutar}"
+          [ "$estado" = "success" ] || { echo "El CI no está en verde: no se despliega."; exit 1; }
+      - name: Preparar acceso SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy && chmod 600 ~/.ssh/deploy
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+      - name: Desplegar (pull y compilación en el servidor)
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          MOTIVO: ${{ inputs.motivo }}
+        run: |
+          echo "Motivo: $MOTIVO | commit $GITHUB_SHA | lanzado por $GITHUB_ACTOR"
+          ssh -i ~/.ssh/deploy "$DEPLOY_USER@$DEPLOY_HOST" bash -s <<'REMOTO'
+          set -e
+          cd /home/opc/Econfia/Econfia-Frontend
+          git pull --ff-only
+          git log --oneline -1
+          npm run build
+          curl -s -o /dev/null -w "web %{http_code}\n" --max-time 25 https://econfia.co/
+          REMOTO
