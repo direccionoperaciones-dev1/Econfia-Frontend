@@ -45,6 +45,7 @@ import EliminarCuenta from "./pages/EliminarCuenta";
 import PoliticaCookies from "./pages/PoliticaCookies";
 import CookieBanner from "./components/CookieBanner";
 import VerificarConsulta from "./pages/VerificarConsulta";
+import AutorizarConsulta from "./pages/AutorizarConsulta";
 import PropuestaPublica from "./pages/PropuestaPublica";
 import TitulosValidationForm from "./views/TitulosValidationForm";
 import AdminPanel from "./pages/AdminPanel";
@@ -885,6 +886,7 @@ export default function App() {
             <Route path="/politica-cookies"    element={<PoliticaCookies />}    />
             <Route path="/verificar-consulta"         element={<VerificarConsulta />} />
             <Route path="/verificar-consulta/:codigo" element={<VerificarConsulta />} />
+            <Route path="/autorizar/:token" element={<AutorizarConsulta />} />
             <Route path="/propuesta/:token" element={<PropuestaPublica />} />
             {/* Legales públicas del programa SMS de econfiaWallet (requeridas por Twilio) */}
             <Route path="/sms-terms"           element={<SmsTerminos />}            />
