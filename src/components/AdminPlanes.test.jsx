@@ -69,7 +69,7 @@ describe("tabla de planes", () => {
     render(<AdminPlanes />);
     const fila = (await screen.findByText("Econfia Contact Search")).closest("tr");
     expect(fila).toHaveTextContent("Sin precio");
-    expect(screen.getByText("Econfia Credit Report").closest("tr")).toHaveTextContent("30.000");
+    expect(screen.getAllByText("Econfia Credit Report").pop().closest("tr")).toHaveTextContent("30.000");
     expect(screen.getAllByText("Estudio de seguridad").pop().closest("tr")).toHaveTextContent("Sin precio");
   });
 
@@ -161,6 +161,24 @@ describe("cotizar desde la tabla", () => {
     const credit = screen.getByLabelText("Cotizar Econfia Credit Report");
     fireEvent.change(credit, { target: { value: "20" } });
     expect(credit.closest("td")).toHaveTextContent("= $ 600.000");
+  });
+});
+
+describe("cotizar por presupuesto", () => {
+  it("con el precio mínimo dice para cuánto alcanza, solo y repartido", async () => {
+    preparar();
+    render(<AdminPlanes />);
+    const caja = (await screen.findByText("¿Para cuánto le alcanza?")).parentElement;
+    fireEvent.change(within(caja).getByLabelText("Presupuesto del cliente"), { target: { value: "10000000" } });
+    fireEvent.click(within(caja).getByRole("button", { name: "EconfiaFast" }));
+    const fast = within(caja).getByText("EconfiaFast", { selector: "td" }).closest("tr");
+    expect(fast).toHaveTextContent("4.000");
+    expect(fast).toHaveTextContent("2.500 consultas");
+    fireEvent.click(within(caja).getByRole("button", { name: "Polígrafo" }));
+    const poli = within(caja).getByText("Polígrafo", { selector: "td" }).closest("tr");
+    expect(poli).toHaveTextContent("100 pruebas");
+    expect(poli).toHaveTextContent("50 pruebas");
+    expect(within(caja).getByText("EconfiaFast", { selector: "td" }).closest("tr")).toHaveTextContent("1.250 consultas");
   });
 });
 

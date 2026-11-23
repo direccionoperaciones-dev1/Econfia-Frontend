@@ -547,6 +547,7 @@ export default function AdminPlanes() {
             </div>
           </form>
           <AjusteIPCPanel api={api} planes={planes} onApplied={loadData} notify={setToast} />
+          <CotizadorPresupuesto catalogo={catalogo} currency={displayCurrency} trm={trm} />
           <PlansTable loading={loading} planes={planes} displayCurrency={displayCurrency} trm={trm} onDiscount={saveDiscount} onEdit={editPlan} onRates={openRates} onAssign={openAssign} onDelete={deletePlan} />
         </> : <>
           <form onSubmit={saveProposal} className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg md:p-6">
@@ -751,6 +752,52 @@ function Cotizador({ plan, producto, descuento, currency, trm, label }) {
     {precio && <div className="mt-1 text-xs">
       <div className="font-black text-brand">= {money(total, currency)}</div>
       <div className="text-muted">{qty.toLocaleString("es-CO")} × {money(conDescuento(Number(precio.precio_unitario), descuento), currency)}{descuento > 0 ? ` (−${descuento}%)` : ""}</div>
+    </div>}
+  </div>;
+}
+
+// Precio más bajo de cada línea (la tarifa de mayor volumen), con su descuento.
+const precioMinimo = (plan, producto, moneda, trm) => {
+  const unitarios = tarifasDe(plan, producto).map((r) => Number(r.precio_unitario)).filter((v) => v > 0);
+  const base = unitarios.length ? Math.min(...unitarios) : precioBase(plan, producto);
+  return conDescuento(convertCurrency(base, plan.moneda, moneda, trm), descuentoDe(plan, producto));
+};
+
+// Cotizar por presupuesto: el cliente dice cuánto tiene y se muestra para cuánto le alcanza
+// de cada servicio escogido, con el precio mínimo. Con varios, el presupuesto se reparte por igual.
+function CotizadorPresupuesto({ catalogo, currency, trm }) {
+  const [presupuesto, setPresupuesto] = useState("");
+  const [elegidos, setElegidos] = useState([]);
+  const lineas = catalogo
+    .map((l) => ({ ...l, minimo: precioMinimo(l.plan, l.producto, currency, trm) }))
+    .filter((l) => l.minimo > 0);
+  const monto = Number(presupuesto || 0);
+  const escogidas = lineas.filter((l) => elegidos.includes(l.clave));
+  const parte = escogidas.length ? monto / escogidas.length : 0;
+  const reparto = escogidas.map((l) => {
+    const cantidad = Math.floor(parte / l.minimo);
+    return { ...l, cantidad, valor: cantidad * l.minimo, solo: Math.floor(monto / l.minimo) };
+  });
+  const usado = reparto.reduce((acc, l) => acc + l.valor, 0);
+  const alternar = (clave) => setElegidos((prev) => prev.includes(clave) ? prev.filter((c) => c !== clave) : [...prev, clave]);
+  const unidades = (l, n) => `${n.toLocaleString("es-CO")} ${n === 1 ? singular(l.plan) : plural(l.plan)}`;
+  return <div className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg md:p-6">
+    <h3 className="text-lg font-black text-content">¿Para cuánto le alcanza?</h3>
+    <p className="mb-4 text-xs text-muted">Escribe el presupuesto del cliente y escoge los servicios. Se calcula con el precio mínimo de cada uno (tarifa de mayor volumen, con su descuento).</p>
+    <div className="grid gap-4 md:grid-cols-[260px_1fr]">
+      <Field label="Presupuesto del cliente"><MoneyInput value={presupuesto} currency={currency} allowEmpty placeholder="10.000.000" ariaLabel="Presupuesto del cliente" onChange={setPresupuesto} /></Field>
+      <div><span className={labelClass}>Servicios</span><div className="flex flex-wrap gap-2">{lineas.map((l) => <button key={l.clave} type="button" onClick={() => alternar(l.clave)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-bold ${elegidos.includes(l.clave) ? "border-brand/60 bg-brand/15 text-brand" : "border-line/20 text-muted hover:text-content"}`}>{l.nombre}</button>)}</div></div>
+    </div>
+    {monto > 0 && reparto.length > 0 && <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[620px] text-left text-sm text-content">
+      <thead className="text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="py-2 pr-3">Servicio</th><th className="px-3 py-2">Precio mínimo</th><th className="px-3 py-2">Solo con este</th>{reparto.length > 1 && <th className="px-3 py-2">Repartido ({money(parte, currency)} c/u)</th>}</tr></thead>
+      <tbody>{reparto.map((l) => <tr key={l.clave} className="border-t border-line/10">
+        <td className="py-2 pr-3 font-black">{l.nombre}</td>
+        <td className="px-3 py-2">{money(l.minimo, currency)}</td>
+        <td className="px-3 py-2 font-bold text-brand">{unidades(l, l.solo)}</td>
+        {reparto.length > 1 && <td className="px-3 py-2"><span className="font-bold text-brand">{unidades(l, l.cantidad)}</span><span className="ml-1 text-xs text-muted">= {money(l.valor, currency)}</span></td>}
+      </tr>)}</tbody>
+    </table>
+    {reparto.length > 1 && <div className="mt-2 text-xs text-muted">Repartido usa {money(usado, currency)} de {money(monto, currency)} · sobran {money(monto - usado, currency)}</div>}
     </div>}
   </div>;
 }
