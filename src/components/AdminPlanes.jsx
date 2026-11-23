@@ -202,6 +202,7 @@ export default function AdminPlanes() {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [trm, setTrm] = useState(null);
   const [displayCurrency, setDisplayCurrency] = useState("COP");
+  const [presupuestoPropuesta, setPresupuestoPropuesta] = useState("");
   const [rateCurrency, setRateCurrency] = useState("COP");
 
   const api = async (path, options = {}) => {
@@ -367,6 +368,27 @@ export default function AdminPlanes() {
     return { ...current, items: [...current.items, lineaNueva(entrada.plan, entrada.producto, precio)] };
   });
   const planDeLinea = (item) => planes.find((p) => String(p.id) === String(item.plan));
+  // Reparte el presupuesto del cliente por igual entre lo marcado, con el precio mínimo de cada uno.
+  const repartirPresupuesto = () => {
+    const monto = Number(presupuestoPropuesta || 0);
+    const lineas = proposalForm.items.filter((item) => !item.es_bono && planDeLinea(item));
+    if (!(monto > 0) || !lineas.length) return;
+    const parte = monto / lineas.length;
+    setProposalForm((current) => ({
+      ...current,
+      items: current.items.map((item) => {
+        const plan = planDeLinea(item);
+        if (item.es_bono || !plan) return item;
+        const unitario = unitarioMinimo(plan, item.producto, current.moneda, trm);
+        const final = conDescuento(unitario, item.descuento_porcentaje);
+        if (!(final > 0)) return item;
+        const cantidad = String(Math.max(1, Math.floor(parte / final)));
+        const auto = precioAutomatico(plan, item.producto, cantidad, current.moneda, trm);
+        if (Math.round(Number(auto.precio_unitario)) === Math.round(unitario) && auto.precio_paquete === "") return { ...item, cantidad, precio_manual: false, ...auto };
+        return { ...item, cantidad, precio_manual: true, precio_unitario: String(Math.round(unitario * 100) / 100), tarifa_origen: "", precio_paquete: "", descuento_volumen_porcentaje: "0", precio_consulta_adicional: "" };
+      }),
+    }));
+  };
   const changeItemQuantity = (index, cantidad) => {
     const item = proposalForm.items[index];
     const plan = planDeLinea(item);
@@ -595,6 +617,12 @@ export default function AdminPlanes() {
             </div>
             {proposalForm.items.length > 0 && <div className="mt-6">
               <div className="text-sm font-black text-content">2. Pon la cantidad</div>
+              <div className="mt-2 flex flex-wrap items-end gap-3 rounded-2xl border border-line/15 bg-surface-2/40 p-3">
+                <div className="w-56"><Field label="Presupuesto del cliente"><MoneyInput value={presupuestoPropuesta} currency={proposalForm.moneda} allowEmpty placeholder="10.000.000" ariaLabel="Presupuesto del cliente para la propuesta" onChange={setPresupuestoPropuesta} /></Field></div>
+                <button type="button" disabled={!(Number(presupuestoPropuesta) > 0)} onClick={repartirPresupuesto} className="rounded-xl border border-brand/40 bg-brand/10 px-4 py-2.5 text-sm font-bold text-brand disabled:opacity-50">Repartir presupuesto</button>
+                <span className="flex-1 text-xs text-muted">Pone la cantidad que alcanza de cada servicio marcado, con su precio mínimo y repartiendo por igual. Después puedes ajustarla a mano.</span>
+                {Number(presupuestoPropuesta) > 0 && <span className="text-xs font-bold text-content">Usa {money(proposalTotal, proposalForm.moneda)} · {proposalTotal <= Number(presupuestoPropuesta) ? `sobran ${money(Number(presupuestoPropuesta) - proposalTotal, proposalForm.moneda)}` : `se pasa ${money(proposalTotal - Number(presupuestoPropuesta), proposalForm.moneda)}`}</span>}
+              </div>
               <div className="mt-3 space-y-2">
                 {proposalForm.items.map((item, index) => <ProposalItemCard key={`${claveLinea(item)}-${item.es_bono ? "b" : "p"}-${index}`} item={item} plan={planDeLinea(item)} sugerido={planDeLinea(item) ? precioAutomatico(planDeLinea(item), item.producto, item.cantidad, proposalForm.moneda, trm).precio_unitario : null} currency={proposalForm.moneda} onChange={(changes) => updateItem(index, changes)} onQuantity={(cantidad) => changeItemQuantity(index, cantidad)} onAutoPrice={() => restablecerPrecio(index)} onGift={() => addGift(index)} onRemove={() => removeItem(index)} />)}
               </div>
@@ -757,11 +785,12 @@ function Cotizador({ plan, producto, descuento, currency, trm, label }) {
 }
 
 // Precio más bajo de cada línea (la tarifa de mayor volumen), con su descuento.
-const precioMinimo = (plan, producto, moneda, trm) => {
+const unitarioMinimo = (plan, producto, moneda, trm) => {
   const unitarios = tarifasDe(plan, producto).map((r) => Number(r.precio_unitario)).filter((v) => v > 0);
   const base = unitarios.length ? Math.min(...unitarios) : precioBase(plan, producto);
-  return conDescuento(convertCurrency(base, plan.moneda, moneda, trm), descuentoDe(plan, producto));
+  return convertCurrency(base, plan.moneda, moneda, trm);
 };
+const precioMinimo = (plan, producto, moneda, trm) => conDescuento(unitarioMinimo(plan, producto, moneda, trm), descuentoDe(plan, producto));
 
 // Cotizar por presupuesto: el cliente dice cuánto tiene y se muestra para cuánto le alcanza
 // de cada servicio escogido, con el precio mínimo. Con varios, el presupuesto se reparte por igual.

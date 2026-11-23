@@ -182,6 +182,20 @@ describe("cotizar por presupuesto", () => {
   });
 });
 
+describe("presupuesto en la propuesta", () => {
+  it("reparte el presupuesto entre lo marcado con el precio mínimo", async () => {
+    preparar();
+    await abrirPropuestas();
+    fireEvent.click(casilla("EconfiaFast"));
+    fireEvent.click(casilla("Polígrafo"));
+    fireEvent.change(screen.getByLabelText("Presupuesto del cliente para la propuesta"), { target: { value: "10000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Repartir presupuesto" }));
+    expect(screen.getByLabelText("Cantidad de EconfiaFast")).toHaveValue(1250);
+    expect(screen.getByLabelText("Cantidad de Polígrafo")).toHaveValue(50);
+    expect(total()).toHaveTextContent("10.000.000");
+  });
+});
+
 describe("descuento por defecto", () => {
   it("se pone en la tabla y muestra el precio con descuento", async () => {
     preparar([{ ...EXPERIAN, descuentos_productos: { adjudicator: "5" } }, FAST]);
