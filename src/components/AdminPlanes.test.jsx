@@ -194,6 +194,18 @@ describe("presupuesto en la propuesta", () => {
     expect(screen.getByLabelText("Cantidad de Polígrafo")).toHaveValue(50);
     expect(total()).toHaveTextContent("10.000.000");
   });
+
+  it("rebaja en pesos por unidad y el reparto usa el precio rebajado", async () => {
+    preparar();
+    await abrirPropuestas();
+    fireEvent.click(casilla("Polígrafo"));
+    fireEvent.change(screen.getByLabelText("Cantidad de Polígrafo"), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText("Rebaja por unidad de Polígrafo"), { target: { value: "10000" } });
+    expect(total()).toHaveTextContent("900.000");
+    fireEvent.change(screen.getByLabelText("Presupuesto del cliente para la propuesta"), { target: { value: "1000000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Repartir presupuesto" }));
+    expect(screen.getByLabelText("Cantidad de Polígrafo")).toHaveValue(11);
+  });
 });
 
 describe("descuento por defecto", () => {

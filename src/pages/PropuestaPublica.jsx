@@ -24,6 +24,7 @@ export default function PropuestaPublica() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [visor, setVisor] = useState(null); // imagen ampliada
+  const preview = new URLSearchParams(search).get("preview") === "1";
 
   useEffect(() => {
     const preview = new URLSearchParams(search).get("preview") === "1" ? "?preview=1" : "";
@@ -108,6 +109,7 @@ export default function PropuestaPublica() {
                 {!item.es_bono && <Fila k={`Precio por ${item.unidad_singular || "consulta"}`} v={money(item.precio_unitario, data.moneda)} />}
                 {item.precio_paquete && <Fila k="Valor del paquete" v={money(item.precio_paquete, data.moneda)} />}
                 {Number(item.descuento_volumen_porcentaje) > 0 && <Fila k="Ahorro por volumen" v={`${pct(item.descuento_volumen_porcentaje)}%`} verde />}
+                {Number(item.descuento_unitario) > 0 && <Fila k={`Descuento por ${item.unidad_singular || "consulta"}`} v={`−${money(item.descuento_unitario, data.moneda)}`} verde />}
                 {Number(item.descuento_porcentaje) > 0 && <Fila k="Descuento" v={`−${pct(item.descuento_porcentaje)}%`} verde />}
                 {item.precio_consulta_adicional && <Fila k={item.unidad_singular === "estudio" ? "Estudio adicional" : item.unidad_singular === "prueba" ? "Prueba adicional" : "Consulta adicional"} v={money(item.precio_consulta_adicional, data.moneda)} />}
                 <div className="flex items-end justify-between pt-3"><span className="font-bold text-violet-200">Valor del {item.etiqueta || "plan"}</span><span className={`text-2xl font-black ${item.es_bono ? "text-emerald-300" : ""}`}>{item.es_bono ? "Sin costo" : money(item.total, data.moneda)}</span></div>
@@ -138,6 +140,8 @@ export default function PropuestaPublica() {
             </div>)}
           </div>
         </section>}
+
+        {!data.vencida && data.items.some((i) => !i.es_bono) && <Contrapropuesta data={data} token={token} preview={preview} onEnviada={(contrapropuesta) => setData((d) => ({ ...d, contrapropuesta }))} />}
 
         <section className="grid items-start gap-5 lg:grid-cols-[1.4fr_1fr]">
           <div className="space-y-5">
@@ -180,6 +184,85 @@ export default function PropuestaPublica() {
       </div>}
     </div>
   );
+}
+
+// El cliente cambia cantidades (no precios): todo se recalcula con lo cotizado y,
+// si nos dijo su presupuesto, no puede pasarse de él.
+function Contrapropuesta({ data, token, preview, onEnviada }) {
+  const editables = data.items.filter((i) => !i.es_bono);
+  const inicial = () => Object.fromEntries(editables.map((i) => [i.id, String(i.cantidad)]));
+  const [abierta, setAbierta] = useState(false);
+  const [cantidades, setCantidades] = useState(inicial);
+  const [comentario, setComentario] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [mensaje, setMensaje] = useState(null);
+  const combo = 1 - Number(data.descuento_porcentaje || 0) / 100;
+  const presupuesto = Number(data.presupuesto_cliente) || 0;
+  const valorDe = (item) => Number(item.valor_unitario || 0) * combo;
+  const cantidadDe = (item) => Math.max(0, parseInt(cantidades[item.id], 10) || 0);
+  const total = editables.reduce((acc, i) => acc + valorDe(i) * cantidadDe(i), 0);
+  const restante = presupuesto - total;
+  const sePasa = presupuesto > 0 && restante < -0.5;
+  const cambio = editables.some((i) => cantidadDe(i) !== Number(i.cantidad));
+  const algunaCantidad = editables.some((i) => cantidadDe(i) > 0);
+  const poner = (item, valor) => setCantidades((c) => ({ ...c, [item.id]: String(Math.max(0, valor)) }));
+  const unidad = (item, n) => n === 1 ? (item.unidad_singular || "consulta") : (item.unidad_plural || "consultas");
+  const enviar = async () => {
+    setEnviando(true); setMensaje(null);
+    try {
+      const r = await fetch(`${API_URL}/api/propuestas/publica/${encodeURIComponent(token)}/contrapropuesta/`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: editables.map((i) => ({ id: i.id, cantidad: cantidadDe(i) })), comentario }),
+      });
+      const body = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(body.detail || "No fue posible enviar tu contrapropuesta.");
+      setMensaje({ ok: true, texto: body.detail });
+      onEnviada(body.contrapropuesta);
+      setAbierta(false);
+    } catch (e) { setMensaje({ ok: false, texto: e.message }); }
+    finally { setEnviando(false); }
+  };
+
+  return <section className="mb-14 rounded-3xl border border-violet-300/20 bg-white/[0.04] p-6 print:hidden">
+    <div className="flex flex-wrap items-start justify-between gap-4">
+      <Titulo kicker="¿Quieres otra combinación?" titulo="Ajusta las cantidades" compacto />
+      {!abierta && <button type="button" onClick={() => { setAbierta(true); setMensaje(null); }} className="rounded-xl bg-white px-5 py-2.5 text-sm font-black text-[#2c1470] transition hover:bg-violet-100">Hacer una contrapropuesta</button>}
+    </div>
+    <p className="max-w-3xl text-sm leading-6 text-violet-100/75">Cambia cuántas consultas, estudios o pruebas quieres de cada servicio. Los precios son los de esta propuesta y el total se calcula solo{presupuesto > 0 ? `, sin pasarte de tu presupuesto de ${money(presupuesto, data.moneda)}` : ""}.</p>
+    {data.contrapropuesta && !abierta && <div className="mt-4 rounded-2xl bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">✅ Enviaste una contrapropuesta el {new Date(data.contrapropuesta.creada).toLocaleString("es-CO")} por {money(data.contrapropuesta.total, data.moneda)}. Tu asesor te contactará; si quieres, puedes enviar otra.</div>}
+    {mensaje && <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${mensaje.ok ? "bg-emerald-400/10 text-emerald-200" : "bg-red-500/15 text-red-200"}`}>{mensaje.texto}</div>}
+    {abierta && <div className="mt-5">
+      <div className="space-y-3">
+        {editables.map((item) => {
+          const n = cantidadDe(item);
+          const masQueAlcanzan = presupuesto > 0 && valorDe(item) > 0 ? Math.floor(Math.max(0, restante) / valorDe(item)) : null;
+          return <div key={item.id} className="flex flex-wrap items-center gap-3 rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="min-w-[180px] flex-1"><div className="font-black">{item.plan_nombre}</div><div className="text-xs text-violet-200/70">{money(valorDe(item), data.moneda)} por {unidad(item, 1)} · cotizado: {Number(item.cantidad).toLocaleString("es-CO")}</div></div>
+            <div className="flex items-center gap-1.5">
+              <button type="button" aria-label={`Menos ${item.plan_nombre}`} onClick={() => poner(item, n - 1)} className="h-10 w-10 rounded-xl bg-white/10 text-lg font-black hover:bg-white/20">−</button>
+              <input aria-label={`Cantidad de ${item.plan_nombre}`} type="number" min="0" inputMode="numeric" value={cantidades[item.id]} onFocus={(e) => e.target.select()} onChange={(e) => setCantidades((c) => ({ ...c, [item.id]: e.target.value.replace(/[^0-9]/g, "") }))} className="h-10 w-28 rounded-xl border border-white/15 bg-white/10 px-3 text-center font-black text-white outline-none focus:border-violet-300" />
+              <button type="button" aria-label={`Más ${item.plan_nombre}`} onClick={() => poner(item, n + 1)} className="h-10 w-10 rounded-xl bg-white/10 text-lg font-black hover:bg-white/20">+</button>
+            </div>
+            <div className="w-40 text-right"><div className="font-black">{money(valorDe(item) * n, data.moneda)}</div>{masQueAlcanzan != null && masQueAlcanzan > 0 && <button type="button" onClick={() => poner(item, n + masQueAlcanzan)} className="text-[11px] font-bold text-emerald-300 hover:underline">+{masQueAlcanzan.toLocaleString("es-CO")} más te alcanzan</button>}</div>
+          </div>;
+        })}
+      </div>
+      <div className={`mt-4 rounded-2xl p-4 ${sePasa ? "bg-red-500/15" : "bg-violet-500/15"}`}>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div><div className="text-xs font-bold uppercase tracking-[0.2em] text-violet-200">Nuevo total</div><div className="text-3xl font-black">{money(total, data.moneda)}</div>{Number(data.descuento_porcentaje) > 0 && <div className="text-xs text-violet-200/70">Incluye el descuento comercial de {pct(data.descuento_porcentaje)}%</div>}</div>
+          {presupuesto > 0 && <div className="text-right text-sm"><div className="text-violet-200/80">Tu presupuesto: <b>{money(presupuesto, data.moneda)}</b></div><div className={`font-black ${sePasa ? "text-red-300" : "text-emerald-300"}`}>{sePasa ? `Te pasas por ${money(-restante, data.moneda)}` : `Te quedan ${money(Math.max(0, restante), data.moneda)}`}</div></div>}
+        </div>
+        {presupuesto > 0 && <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${sePasa ? "bg-red-400" : "bg-emerald-400"}`} style={{ width: `${Math.min(100, (total / presupuesto) * 100)}%` }} /></div>}
+      </div>
+      <textarea aria-label="Comentario para tu asesor" value={comentario} onChange={(e) => setComentario(e.target.value)} maxLength={1000} placeholder="¿Algo más que debamos saber? (opcional)" className="mt-4 min-h-20 w-full resize-y rounded-2xl border border-white/15 bg-white/5 p-3 text-sm text-white outline-none placeholder:text-violet-200/40 focus:border-violet-300" />
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <button type="button" onClick={enviar} disabled={preview || enviando || !cambio || sePasa || !algunaCantidad} className="rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-black text-[#0d0724] transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50">{enviando ? "Enviando…" : "Enviar contrapropuesta"}</button>
+        <button type="button" onClick={() => { setCantidades(inicial()); setMensaje(null); }} className="text-sm font-bold text-violet-200 hover:text-white">Volver a lo cotizado</button>
+        <button type="button" onClick={() => setAbierta(false)} className="text-sm font-bold text-violet-200/70 hover:text-white">Cerrar</button>
+        <span className="text-xs text-violet-200/60">{preview ? "Vista previa del asesor: aquí no se envía." : sePasa ? "Baja alguna cantidad para no pasarte de tu presupuesto." : !cambio ? "Cambia alguna cantidad para enviarla." : "Tu asesor la recibe y te envía la propuesta ajustada."}</span>
+      </div>
+    </div>}
+  </section>;
 }
 
 function Pantalla({ children }) {
