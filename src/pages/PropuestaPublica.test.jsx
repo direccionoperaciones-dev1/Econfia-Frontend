@@ -40,8 +40,8 @@ function abrir(search = "") {
 describe("contrapropuesta del cliente", () => {
   it("cambia cantidades, recalcula y no deja pasarse del presupuesto", async () => {
     abrir();
-    fireEvent.click(await screen.findByRole("button", { name: "Hacer una contrapropuesta" }));
-    const enviar = screen.getByRole("button", { name: "Enviar contrapropuesta" });
+    fireEvent.click(await screen.findByRole("button", { name: "Personaliza tu cotización" }));
+    const enviar = screen.getByRole("button", { name: "Enviar cotización personalizada" });
     expect(enviar).toBeDisabled(); // sin cambios todavía
     expect(screen.getByText("Te quedan $ 100.000")).toBeInTheDocument();
 
@@ -55,20 +55,20 @@ describe("contrapropuesta del cliente", () => {
     fireEvent.click(enviar);
     await waitFor(() => expect(envios).toHaveLength(1));
     expect(envios[0].items).toEqual([{ id: 1, cantidad: 80 }, { id: 2, cantidad: 6 }]);
-    expect(await screen.findByText("Recibimos tu contrapropuesta.")).toBeInTheDocument();
+    expect(await screen.findByText("Recibimos tu cotización personalizada. Tu asesor te contactará.")).toBeInTheDocument();
   });
 
   it("sugiere cuántas más le alcanzan con lo que queda", async () => {
     abrir();
-    fireEvent.click(await screen.findByRole("button", { name: "Hacer una contrapropuesta" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Personaliza tu cotización" }));
     fireEvent.click(screen.getByRole("button", { name: "+20 más te alcanzan" }));
     expect(screen.getByLabelText("Cantidad de EconfiaFast")).toHaveValue(120);
   });
 
   it("en la vista previa del asesor no se puede enviar", async () => {
     abrir("?preview=1");
-    fireEvent.click(await screen.findByRole("button", { name: "Hacer una contrapropuesta" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Personaliza tu cotización" }));
     fireEvent.change(screen.getByLabelText("Cantidad de EconfiaFast"), { target: { value: "90" } });
-    expect(screen.getByRole("button", { name: "Enviar contrapropuesta" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Enviar cotización personalizada" })).toBeDisabled();
   });
 });

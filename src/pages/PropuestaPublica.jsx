@@ -215,8 +215,8 @@ function Contrapropuesta({ data, token, preview, onEnviada }) {
         body: JSON.stringify({ items: editables.map((i) => ({ id: i.id, cantidad: cantidadDe(i) })), comentario }),
       });
       const body = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(body.detail || "No fue posible enviar tu contrapropuesta.");
-      setMensaje({ ok: true, texto: body.detail });
+      if (!r.ok) throw new Error(body.detail || "No fue posible enviar tu cotización personalizada.");
+      setMensaje({ ok: true, texto: "Recibimos tu cotización personalizada. Tu asesor te contactará." });
       onEnviada(body.contrapropuesta);
       setAbierta(false);
     } catch (e) { setMensaje({ ok: false, texto: e.message }); }
@@ -226,10 +226,10 @@ function Contrapropuesta({ data, token, preview, onEnviada }) {
   return <section className="mb-14 rounded-3xl border border-violet-300/20 bg-white/[0.04] p-6 print:hidden">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <Titulo kicker="¿Quieres otra combinación?" titulo="Ajusta las cantidades" compacto />
-      {!abierta && <button type="button" onClick={() => { setAbierta(true); setMensaje(null); }} className="rounded-xl bg-white px-5 py-2.5 text-sm font-black text-[#2c1470] transition hover:bg-violet-100">Hacer una contrapropuesta</button>}
+      {!abierta && <button type="button" onClick={() => { setAbierta(true); setMensaje(null); }} className="rounded-xl bg-white px-5 py-2.5 text-sm font-black text-[#2c1470] transition hover:bg-violet-100">Personaliza tu cotización</button>}
     </div>
     <p className="max-w-3xl text-sm leading-6 text-violet-100/75">Cambia cuántas consultas, estudios o pruebas quieres de cada servicio. Los precios son los de esta propuesta y el total se calcula solo{presupuesto > 0 ? `, sin pasarte de tu presupuesto de ${money(presupuesto, data.moneda)}` : ""}.</p>
-    {data.contrapropuesta && !abierta && <div className="mt-4 rounded-2xl bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">✅ Enviaste una contrapropuesta el {new Date(data.contrapropuesta.creada).toLocaleString("es-CO")} por {money(data.contrapropuesta.total, data.moneda)}. Tu asesor te contactará; si quieres, puedes enviar otra.</div>}
+    {data.contrapropuesta && !abierta && <div className="mt-4 rounded-2xl bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">✅ Enviaste tu cotización personalizada el {new Date(data.contrapropuesta.creada).toLocaleString("es-CO")} por {money(data.contrapropuesta.total, data.moneda)}. Tu asesor te contactará; si quieres, puedes enviar otra.</div>}
     {mensaje && <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${mensaje.ok ? "bg-emerald-400/10 text-emerald-200" : "bg-red-500/15 text-red-200"}`}>{mensaje.texto}</div>}
     {abierta && <div className="mt-5">
       <div className="space-y-3">
@@ -256,7 +256,7 @@ function Contrapropuesta({ data, token, preview, onEnviada }) {
       </div>
       <textarea aria-label="Comentario para tu asesor" value={comentario} onChange={(e) => setComentario(e.target.value)} maxLength={1000} placeholder="¿Algo más que debamos saber? (opcional)" className="mt-4 min-h-20 w-full resize-y rounded-2xl border border-white/15 bg-white/5 p-3 text-sm text-white outline-none placeholder:text-violet-200/40 focus:border-violet-300" />
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={enviar} disabled={preview || enviando || !cambio || sePasa || !algunaCantidad} className="rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-black text-[#0d0724] transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50">{enviando ? "Enviando…" : "Enviar contrapropuesta"}</button>
+        <button type="button" onClick={enviar} disabled={preview || enviando || !cambio || sePasa || !algunaCantidad} className="rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-black text-[#0d0724] transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-50">{enviando ? "Enviando…" : "Enviar cotización personalizada"}</button>
         <button type="button" onClick={() => { setCantidades(inicial()); setMensaje(null); }} className="text-sm font-bold text-violet-200 hover:text-white">Volver a lo cotizado</button>
         <button type="button" onClick={() => setAbierta(false)} className="text-sm font-bold text-violet-200/70 hover:text-white">Cerrar</button>
         <span className="text-xs text-violet-200/60">{preview ? "Vista previa del asesor: aquí no se envía." : sePasa ? "Baja alguna cantidad para no pasarte de tu presupuesto." : !cambio ? "Cambia alguna cantidad para enviarla." : "Tu asesor la recibe y te envía la propuesta ajustada."}</span>
