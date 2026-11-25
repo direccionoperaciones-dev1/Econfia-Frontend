@@ -361,9 +361,22 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
     .map((t) => `<button type="button" data-tipo-jump="${esc(t.toLowerCase())}" class="chip-tipo shrink-0 inline-flex items-center px-3 py-1 rounded-full bg-brand-card border border-brand-border text-slate-300 text-xs font-semibold hover:border-brand-cyan/60 hover:text-brand-cyan transition">${esc(t)}</button>`)
     .join("");
 
+  // Buscador flotante abajo, al lado del chatbot: antes era una barra pegada arriba
+  // que tapaba el contenido al subir y bajar.
   const barraBusqueda = `
-  <div class="sticky top-16 z-40 mt-4 -mx-4 sm:-mx-6 lg:-mx-10 px-4 sm:px-6 lg:px-10 py-3 bg-brand-navy/95 backdrop-blur-md border-b border-brand-border/70 space-y-2.5">
-    <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+  <button id="btn-buscar" type="button" title="Buscar fuente (tecla /)" aria-expanded="false" aria-controls="panel-buscar"
+    class="fixed bottom-5 right-24 z-50 inline-flex items-center gap-2 h-11 px-4 rounded-full bg-brand-card/95 backdrop-blur-md border border-brand-cyan/50 text-brand-cyan shadow-hud text-sm font-semibold hover:bg-brand-surface transition">
+    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"></path></svg>
+    <span>Buscar fuente</span>
+    ${conHallazgo.length ? `<span class="ml-1 px-1.5 rounded-full bg-rose-500/20 text-rose-300 text-xs">${conHallazgo.length}</span>` : ""}
+  </button>
+  <div id="panel-buscar" role="dialog" aria-label="Buscar fuente"
+    class="hidden fixed bottom-20 right-4 sm:right-24 z-50 w-[min(44rem,calc(100vw-2rem))] max-h-[60vh] overflow-y-auto rounded-2xl bg-brand-navy/95 backdrop-blur-md border border-brand-border shadow-hud p-3 space-y-2.5">
+    <div class="flex items-center justify-between gap-3">
+      <span class="text-[11px] uppercase tracking-wider text-slate-400 font-semibold">Buscar en el informe</span>
+      <button id="cerrar-buscar" type="button" title="Cerrar" class="w-7 h-7 rounded-full text-slate-400 hover:text-white hover:bg-white/10">✕</button>
+    </div>
+    <div class="flex flex-col gap-2.5">
       <div class="relative flex-1 min-w-0">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"></path></svg>
         <input id="buscar-fuente" type="text" placeholder="Buscar fuente o tipo... (ej. policía, RUES, judicial)" autocomplete="off"
@@ -371,14 +384,14 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
         <span id="buscar-contador" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500"></span>
       </div>
       ${conHallazgo.length
-        ? `<div class="flex items-center gap-2 overflow-x-auto pb-1">
+        ? `<div class="flex flex-wrap items-center gap-2">
              <span class="text-xs text-rose-300 font-semibold shrink-0">${conHallazgo.length} con hallazgo:</span>
              ${chips}
            </div>`
         : `<span class="text-xs text-brand-emerald font-semibold shrink-0">✓ Sin hallazgos</span>`}
     </div>
     ${chipsTipo
-      ? `<div class="flex items-center gap-2 overflow-x-auto pb-0.5">
+      ? `<div class="flex flex-wrap items-center gap-2">
            <span class="text-[11px] uppercase tracking-wider text-slate-500 font-semibold shrink-0">Ir a tipo:</span>
            ${chipsTipo}
          </div>`
@@ -615,6 +628,25 @@ ${barraBusqueda}
 
     var ultimaBusqueda = '';
     var indiceCiclo = 0;
+
+    // Abrir / cerrar el buscador flotante.
+    var btnBuscar = document.getElementById('btn-buscar');
+    var panel = document.getElementById('panel-buscar');
+    function abrirBuscador(abrir) {
+      if (!panel) return;
+      panel.classList.toggle('hidden', !abrir);
+      btnBuscar.setAttribute('aria-expanded', abrir ? 'true' : 'false');
+      if (abrir && input) input.focus();
+      if (!abrir && input && document.activeElement === input) input.blur();
+    }
+    if (btnBuscar) btnBuscar.addEventListener('click', function () { abrirBuscador(panel.classList.contains('hidden')); });
+    var cerrar = document.getElementById('cerrar-buscar');
+    if (cerrar) cerrar.addEventListener('click', function () { abrirBuscador(false); });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') abrirBuscador(false);
+      var escribiendo = /INPUT|TEXTAREA/.test((document.activeElement || {}).tagName || '');
+      if (e.key === '/' && !escribiendo) { e.preventDefault(); abrirBuscador(true); }
+    });
 
     if (input) {
       // Al escribir: actualiza el contador y salta suave a la mejor coincidencia.
