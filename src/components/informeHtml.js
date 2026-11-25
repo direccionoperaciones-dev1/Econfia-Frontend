@@ -250,7 +250,7 @@ function resultadoCard(r, i, total, mediaBase, fechaConsulta) {
   const tipoBusqueda = String(r?.tipo_fuente || r?.tipo || infoFuente.categoria || "").toLowerCase().replace(/"/g, "");
 
   return `
-  <section id="f${i}" data-nombre="${nombreBusqueda}" data-tipo="${tipoBusqueda}" data-hallazgo="${hallazgo ? 1 : 0}" class="fuente-card scroll-mt-28 bg-brand-surface rounded-2xl border ${hallazgo ? "border-rose-500/50" : "border-brand-border/90"} overflow-hidden shadow-hud">
+  <section id="f${i}" data-nombre="${nombreBusqueda}" data-tipo="${tipoBusqueda}" data-label="${fuente}" data-tipo-label="${tipo}" data-hallazgo="${hallazgo ? 1 : 0}" class="fuente-card scroll-mt-28 bg-brand-surface rounded-2xl border ${hallazgo ? "border-rose-500/50" : "border-brand-border/90"} overflow-hidden shadow-hud">
     <div class="bg-gradient-to-r from-emerald-800 via-emerald-700 to-emerald-800 px-6 py-3 flex items-center justify-between gap-2">
       <div class="flex items-center gap-3 min-w-0">
         <svg class="w-5 h-5 text-white shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
@@ -379,10 +379,11 @@ export function buildInformeHtml({ consulta, riesgo, resultados, apiUrl, qrUrl, 
     <div class="flex flex-col gap-2.5">
       <div class="relative flex-1 min-w-0">
         <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 18a7 7 0 100-14 7 7 0 000 14z"></path></svg>
-        <input id="buscar-fuente" type="text" placeholder="Buscar fuente o tipo... (ej. policía, RUES, judicial)" autocomplete="off"
+        <input id="buscar-fuente" type="text" role="combobox" aria-autocomplete="list" aria-controls="sugerencias" placeholder="Buscar fuente o tipo... (ej. policía, RUES, judicial)" autocomplete="off"
           class="w-full pl-9 pr-16 py-2 rounded-lg bg-brand-card border border-brand-border text-slate-100 placeholder:text-slate-500 text-sm focus:outline-none focus:border-brand-cyan/60 focus:ring-2 focus:ring-brand-cyan/20 transition"/>
         <span id="buscar-contador" class="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500"></span>
       </div>
+      <ul id="sugerencias" role="listbox" aria-label="Fuentes sugeridas" class="hidden max-h-64 overflow-y-auto rounded-lg border border-brand-border bg-brand-card divide-y divide-brand-border/60"></ul>
       ${conHallazgo.length
         ? `<div class="flex flex-wrap items-center gap-2">
              <span class="text-xs text-rose-300 font-semibold shrink-0">${conHallazgo.length} con hallazgo:</span>
@@ -609,12 +610,77 @@ ${barraBusqueda}
     }
 
     // Devuelve las tarjetas que coinciden con el texto (nombre, tipo o contenido).
+    // Sin tildes ni mayúsculas: "policia" encuentra "Policía".
+    function norm(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''); }
+    cards.forEach(function (c) {
+      c._nombre = norm(c.getAttribute('data-label') || c.getAttribute('data-nombre'));
+      c._tipo = norm(c.getAttribute('data-tipo'));
+      c._texto = norm(c.textContent);
+    });
     function coincidencias(q) {
+      q = norm(q);
       if (!q) return [];
       return cards.filter(function (c) {
-        return (c.getAttribute('data-nombre') || '').indexOf(q) !== -1
-          || (c.getAttribute('data-tipo') || '').indexOf(q) !== -1
-          || (c.textContent || '').toLowerCase().indexOf(q) !== -1;
+        return c._nombre.indexOf(q) !== -1 || c._tipo.indexOf(q) !== -1 || c._texto.indexOf(q) !== -1;
+      });
+    }
+
+    // Autocompletado: primero las que EMPIEZAN por lo escrito, luego las que lo
+    // contienen en el nombre, luego por tipo; las de hallazgo van antes en cada grupo.
+    var lista = document.getElementById('sugerencias');
+    var sugeridas = [];
+    var activa = -1;
+    function escHtml(t) { return String(t).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
+    function resaltarTexto(texto, q) {
+      var i = norm(texto).indexOf(q);
+      if (i === -1 || !q) return escHtml(texto);
+      return escHtml(texto.slice(0, i)) + '<b class="text-brand-cyan">' + escHtml(texto.slice(i, i + q.length)) + '</b>' + escHtml(texto.slice(i + q.length));
+    }
+    function sugerir(q) {
+      q = norm(q);
+      if (!lista) return;
+      if (!q) { sugeridas = []; pintar(q); return; }
+      function grupo(c) {
+        if (c._nombre.indexOf(q) === 0) return 0;
+        if (c._nombre.indexOf(q) !== -1) return 1;
+        if (c._tipo.indexOf(q) !== -1) return 2;
+        return 3;
+      }
+      sugeridas = cards.filter(function (c) { return grupo(c) < 3; })
+        .sort(function (a, b) {
+          return (grupo(a) - grupo(b)) || ((b.getAttribute('data-hallazgo') === '1') - (a.getAttribute('data-hallazgo') === '1'));
+        })
+        .slice(0, 8);
+      activa = -1;
+      pintar(q);
+    }
+    function pintar(q) {
+      if (!sugeridas.length) { lista.classList.add('hidden'); lista.innerHTML = ''; input.removeAttribute('aria-activedescendant'); return; }
+      lista.innerHTML = sugeridas.map(function (c, i) {
+        var hall = c.getAttribute('data-hallazgo') === '1';
+        return '<li id="sug-' + i + '" role="option" aria-selected="' + (i === activa) + '" data-i="' + i + '" class="px-3 py-2 cursor-pointer flex items-center justify-between gap-3 text-sm ' + (i === activa ? 'bg-brand-cyan/15' : 'hover:bg-white/5') + '">'
+          + '<span class="min-w-0 truncate text-slate-100">' + (hall ? '<span class="inline-block w-2 h-2 rounded-full bg-rose-400 mr-2 align-middle"></span>' : '') + resaltarTexto(c.getAttribute('data-label') || '', q) + '</span>'
+          + '<span class="shrink-0 text-[11px] text-slate-500">' + escHtml(c.getAttribute('data-tipo-label') || '') + '</span></li>';
+      }).join('');
+      lista.classList.remove('hidden');
+      if (activa >= 0) input.setAttribute('aria-activedescendant', 'sug-' + activa); else input.removeAttribute('aria-activedescendant');
+    }
+    function elegir(i) {
+      var c = sugeridas[i];
+      if (!c) return;
+      input.value = c.getAttribute('data-label') || input.value;
+      sugeridas = [];
+      pintar('');
+      contador.textContent = '';
+      resaltar(c);
+    }
+    if (lista) {
+      // mousedown (no click) para elegir antes de que el input pierda el foco.
+      lista.addEventListener('mousedown', function (e) {
+        var li = e.target.closest('[data-i]');
+        if (!li) return;
+        e.preventDefault();
+        elegir(Number(li.getAttribute('data-i')));
       });
     }
 
@@ -656,10 +722,19 @@ ${barraBusqueda}
         contador.textContent = q ? (matches.length + ' encontrada' + (matches.length === 1 ? '' : 's')) : '';
         ultimaBusqueda = q;
         indiceCiclo = 0;
+        sugerir(q);
         if (matches.length) resaltar(mejorCoincidencia(matches));
       });
       // Enter: cicla entre las coincidencias (siguiente cada vez).
       input.addEventListener('keydown', function (e) {
+        if (sugeridas.length && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+          e.preventDefault();
+          activa = (activa + (e.key === 'ArrowDown' ? 1 : -1) + sugeridas.length + 1) % (sugeridas.length + 1);
+          if (activa === sugeridas.length) activa = -1;
+          pintar(norm(input.value));
+          return;
+        }
+        if (e.key === 'Enter' && activa >= 0) { e.preventDefault(); elegir(activa); return; }
         if (e.key !== 'Enter') return;
         e.preventDefault();
         var q = (input.value || '').trim().toLowerCase();
