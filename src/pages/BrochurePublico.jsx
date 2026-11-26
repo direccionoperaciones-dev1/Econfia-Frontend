@@ -1,20 +1,32 @@
 import React, { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
-import Flipbook from "../brochure/Flipbook";
-import { BROCHURE_POR_DEFECTO, temaDe } from "../brochure/brochureBase";
+import VisorBrochure from "../brochure/Formatos";
+import { BROCHURE_POR_DEFECTO, FORMATOS, temaDe } from "../brochure/brochureBase";
 
 const API_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+
+const AYUDA_FORMATO = {
+  revista: "Usa las flechas del teclado, arrastra o toca las esquinas para pasar la hoja.",
+  folleto: "Usa las flechas para desplegar las siguientes caras del folleto.",
+  infografia: "Baja para ir descubriendo cada sección.",
+  video: "Toca la presentación para pausarla o reanudarla.",
+};
 
 const FUENTES_GOOGLE = {
   Montserrat: "Montserrat:wght@600;700;800;900",
   "Playfair Display": "Playfair+Display:wght@600;700;800;900",
 };
 
+const conFormato = (contenido, formato) => (formato ? { ...contenido, tema: { ...(contenido.tema || {}), formato } } : contenido);
+
 // Brochure que acompaña la propuesta: se abre sin sesión desde el correo o la propuesta.
 export default function BrochurePublico() {
   const { search } = useLocation();
-  const tokenPropuesta = new URLSearchParams(search).get("propuesta");
+  const params = new URLSearchParams(search);
+  const tokenPropuesta = params.get("propuesta");
+  // ?formato=video|folleto|infografia|revista muestra el mismo brochure en otro formato.
+  const formatoUrl = FORMATOS[params.get("formato")] ? params.get("formato") : null;
   const [contenido, setContenido] = useState(null);
   const [error, setError] = useState("");
 
@@ -24,11 +36,11 @@ export default function BrochurePublico() {
       .then(async (r) => {
         if (r.status === 404) throw new Error("El brochure no está disponible en este momento.");
         const body = await r.json().catch(() => ({}));
-        if (vivo) setContenido(body.contenido || BROCHURE_POR_DEFECTO);
+        if (vivo) setContenido(conFormato(body.contenido || BROCHURE_POR_DEFECTO, formatoUrl));
       })
-      .catch((e) => { if (vivo) { if (e.message.includes("brochure")) setError(e.message); else setContenido(BROCHURE_POR_DEFECTO); } });
+      .catch((e) => { if (vivo) { if (e.message.includes("brochure")) setError(e.message); else setContenido(conFormato(BROCHURE_POR_DEFECTO, formatoUrl)); } });
     return () => { vivo = false; };
-  }, []);
+  }, [formatoUrl]);
 
   const tema = temaDe(contenido);
   useEffect(() => {
@@ -55,9 +67,9 @@ export default function BrochurePublico() {
     </header>
     <main className="min-h-0 flex-1">
       {error ? <div className="grid h-full place-items-center px-6 text-center text-white/80">{error}</div>
-        : contenido ? <Flipbook contenido={contenido} />
+        : contenido ? <VisorBrochure contenido={contenido} />
           : <div className="grid h-full place-items-center"><div className="h-10 w-10 animate-spin rounded-full border-4 border-white/20 border-t-white" /></div>}
     </main>
-    <p className="hidden shrink-0 pb-3 text-center text-[11px] text-white/40 sm:block">Usa las flechas del teclado, arrastra o toca las esquinas para pasar la hoja.</p>
+    <p className="hidden shrink-0 pb-3 text-center text-[11px] text-white/40 sm:block">{AYUDA_FORMATO[tema.formato] || AYUDA_FORMATO.revista}</p>
   </div>;
 }

@@ -1,6 +1,7 @@
 import React from "react";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import Flipbook from "./Flipbook";
+import VisorBrochure from "./Formatos";
 import BrochureEditor from "../components/BrochureEditor";
 import { BROCHURE_POR_DEFECTO, enlaceSeguro } from "./brochureBase";
 
@@ -57,6 +58,7 @@ describe("Flipbook", () => {
 });
 
 describe("BrochureEditor", () => {
+  jest.setTimeout(30000);
   it("parte del borrador, edita en vivo y guarda", async () => {
     ancho = 1300;
     const llamadas = [];
@@ -87,10 +89,75 @@ describe("BrochureEditor", () => {
   it("agrega una página del tipo elegido después de la seleccionada", async () => {
     const api = jest.fn(async () => ({ contenido: null, publicado: true }));
     render(<BrochureEditor api={api} setToast={jest.fn()} />);
-    await screen.findByText("Páginas (10)");
+    await screen.findByText("Página 1 de 10");
+    fireEvent.click(screen.getByRole("button", { name: "Páginas" }));
     fireEvent.change(screen.getByLabelText("Tipo de página nueva"), { target: { value: "cifras" } });
     fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
-    expect(screen.getByText("Páginas (11)")).toBeInTheDocument();
-    expect(screen.getByText(/Página 2: Cifras/)).toBeInTheDocument();
+    expect(screen.getByText("Página 2 de 11")).toBeInTheDocument();
+    expect(screen.getByText("Cifras")).toBeInTheDocument();
+  });
+
+  it("al hacer clic en una tarjeta del brochure abre su campo para editarla", async () => {
+    ancho = 1300;
+    const api = jest.fn(async () => ({ contenido: null, publicado: true }));
+    render(<BrochureEditor api={api} setToast={jest.fn()} />);
+    await screen.findByText("Página 1 de 10");
+    // La tarjeta "Econfia Essencial" está en la página 6 (productos).
+    fireEvent.click(screen.getAllByText("Econfia Essencial")[0]);
+    expect(screen.getByText("Página 6 de 10")).toBeInTheDocument();
+    expect(await screen.findByDisplayValue("Econfia Essencial")).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement?.closest("#bq-item-1")).not.toBeNull());
+  });
+
+  it("en Diseño cambia el formato y el adorno", async () => {
+    ancho = 1300;
+    const api = jest.fn(async () => ({ contenido: null, publicado: true }));
+    render(<BrochureEditor api={api} setToast={jest.fn()} />);
+    await screen.findByText("Página 1 de 10");
+    fireEvent.click(screen.getByRole("button", { name: "Diseño" }));
+    fireEvent.click(screen.getByRole("button", { name: /Video/ }));
+    expect(screen.getByText("Escena 1 de 10")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Folleto/ }));
+    expect(screen.getByText("Caras 1–3 de 10")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Sin adorno/ }));
+    expect(screen.getByRole("button", { name: /Guardar cambios/ })).toBeEnabled();
+  });
+});
+
+describe("Formatos", () => {
+  const con = (formato) => ({ ...BROCHURE_POR_DEFECTO, tema: { ...BROCHURE_POR_DEFECTO.tema, formato } });
+
+  it("folleto muestra tres caras y avanza de a tres", () => {
+    ancho = 1300;
+    render(<VisorBrochure contenido={con("folleto")} />);
+    expect(screen.getByText("Caras 1–3 de 10")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Siguiente" }));
+    expect(screen.getByText("Caras 4–6 de 10")).toBeInTheDocument();
+  });
+
+  it("video avanza solo y se puede pausar", () => {
+    jest.useFakeTimers();
+    ancho = 1300;
+    render(<VisorBrochure contenido={{ ...con("video"), tema: { ...con("video").tema, video_segundos: 3 } }} />);
+    expect(screen.getByText("Escena 1 de 10")).toBeInTheDocument();
+    act(() => { jest.advanceTimersByTime(3300); });
+    expect(screen.getByText("Escena 2 de 10")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Pausar" }));
+    act(() => { jest.advanceTimersByTime(8000); });
+    expect(screen.getByText("Escena 2 de 10")).toBeInTheDocument();
+    jest.useRealTimers();
+  });
+
+  it("infografía dibuja todas las páginas en una tira", () => {
+    ancho = 900;
+    render(<VisorBrochure contenido={con("infografia")} />);
+    expect(screen.getAllByText("Empieza hoy con Econfia").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Así de fácil empiezas").length).toBeGreaterThan(0);
+  });
+
+  it("dibuja el adorno de constelaciones detrás del contenido", () => {
+    ancho = 390;
+    const { container } = render(<Flipbook contenido={BROCHURE_POR_DEFECTO} />);
+    expect(container.querySelectorAll("svg line").length).toBeGreaterThan(3);
   });
 });

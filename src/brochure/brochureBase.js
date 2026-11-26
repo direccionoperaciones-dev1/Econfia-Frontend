@@ -30,7 +30,28 @@ export const TEMA_POR_DEFECTO = {
   fuente_titulos: "Poppins",
   logo: "/img/logo-econfia-blanco.png",
   logo_oscuro: "/img/logo-econfia.png",
+  formato: "revista",
+  adorno: "constelaciones",
+  adorno_intensidad: 35,
+  video_segundos: 6,
+  video_transicion: "zoom",
 };
+
+// Mismo contenido, distintas formas de presentarlo.
+export const FORMATOS = {
+  revista: { nombre: "Revista", descripcion: "Doble página; las hojas se voltean como papel." },
+  folleto: { nombre: "Folleto", descripcion: "Tríptico: tres caras que se despliegan juntas." },
+  infografia: { nombre: "Infografía", descripcion: "Una tira larga que se revela al bajar." },
+  video: { nombre: "Video", descripcion: "Pasa solo, con transiciones, como historias." },
+};
+
+// Marca de agua decorativa (detrás del contenido).
+export const ADORNOS = {
+  ninguno: "Sin adorno", constelaciones: "Constelaciones", puntos: "Puntos", ondas: "Ondas",
+  lineas: "Líneas diagonales", circulos: "Círculos",
+};
+
+export const TRANSICIONES_VIDEO = { zoom: "Acercamiento", fundido: "Fundido", deslizar: "Deslizar" };
 
 // Qué campos tiene cada tipo de página (lo usa el editor para armar el formulario).
 export const TIPOS_PAGINA = {
@@ -48,6 +69,18 @@ export const ETIQUETAS_CAMPO = {
   texto: "Texto", puntos: "Viñetas (una por línea)", imagen: "Imagen", posicion_imagen: "Imagen arriba o abajo",
   fondo: "Fondo", etiqueta: "Sello (ej. año)", items: "Elementos", boton: "Botón",
   icono: "Ícono", valor: "Cifra", enlace: "Enlace (https://, mailto:, tel:)",
+};
+
+// Ayudas cortas para quien edita por primera vez.
+export const AYUDAS_CAMPO = {
+  kicker: "Texto corto en mayúsculas que va encima del título.",
+  destacado: "Se pinta con el color de acento al final del título.",
+  texto: "Deja una línea en blanco para separar párrafos.",
+  puntos: "Cada línea es una viñeta con chulito.",
+  etiqueta: "Círculo pequeño arriba a la derecha (ej. el año).",
+  items: "Cada elemento es una tarjeta: al pasar el cursor se resalta en color.",
+  boton: "Si dejas el enlace vacío, el botón no aparece.",
+  imagen: "Sube una foto, pega un enlace o elige una de la galería.",
 };
 
 export const paginaNueva = (tipo) => {

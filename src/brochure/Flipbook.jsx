@@ -26,7 +26,7 @@ function useTamano(ref) {
  *
  * `irA` (índice de página) permite que el editor salte a la página que se edita.
  */
-export default function Flipbook({ contenido, irA = null, alto = "100%", onCambio, controles = true }) {
+export default function Flipbook({ contenido, irA = null, alto = "100%", onCambio, controles = true, onEditar }) {
   const tema = temaDe(contenido);
   const paginas = useMemo(() => {
     const lista = contenido?.paginas || [];
@@ -142,7 +142,7 @@ export default function Flipbook({ contenido, irA = null, alto = "100%", onCambi
     borderRadius: lado === "reverso" ? "14px 0 0 14px" : "0 14px 14px 0",
     boxShadow: "0 30px 60px -25px rgba(0,0,0,.55)",
   }}>
-    <PaginaBrochure pagina={paginas[indice]} tema={tema} numero={indice + 1} paginas={paginas} onIr={irAPagina} ancho={anchoPagina} />
+    <PaginaBrochure pagina={paginas[indice]} tema={tema} numero={indice + 1} indice={indice} paginas={paginas} onIr={irAPagina} ancho={anchoPagina} onEditar={onEditar} />
     {/* sombra del lomo */}
     <div className="pointer-events-none absolute inset-y-0 w-10" style={{
       [lado === "reverso" ? "right" : "left"]: 0,
@@ -192,7 +192,7 @@ export default function Flipbook({ contenido, irA = null, alto = "100%", onCambi
           <div key={pagina} className="absolute inset-0 overflow-hidden rounded-[14px] shadow-2xl" style={{
             animation: `bq-entra-${direccion > 0 ? "der" : "izq"} 650ms cubic-bezier(.2,.8,.2,1)`, transformOrigin: direccion > 0 ? "left center" : "right center",
           }}>
-            <PaginaBrochure pagina={paginas[pagina]} tema={tema} numero={pagina + 1} paginas={paginas} onIr={irAPagina} ancho={anchoPagina} />
+            <PaginaBrochure pagina={paginas[pagina]} tema={tema} numero={pagina + 1} indice={pagina} paginas={paginas} onIr={irAPagina} ancho={anchoPagina} onEditar={onEditar} />
           </div>
           <style>{`
             @keyframes bq-entra-der { from { transform: rotateY(-35deg) translateX(30%); opacity: 0; } to { transform: none; opacity: 1; } }
