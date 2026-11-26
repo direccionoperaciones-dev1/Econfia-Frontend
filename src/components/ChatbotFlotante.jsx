@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, X, Send, Phone, Loader2 } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import soporteService from "../services/soporteService";
 
 const WHATSAPP_NUMBER = "573054226582";
@@ -163,7 +164,14 @@ const SALUDOS = ["hola", "buenas", "buenos dias", "buenas tardes", "buenas noche
 // Respuesta genérica de ayuda (cuando no hay match ni IA disponible)
 const RESPUESTA_GENERICA = "Buena pregunta. Puedo ayudarte con temas como: qué son las listas restrictivas y para qué sirven, SARLAFT/SAGRILAFT, debida diligencia (KYC), PEP, antecedentes (Procuraduría, Contraloría, Policía, Rama Judicial), o con planes, reportes y soporte. ¿Sobre cuál quieres que te explique? También puedes hablar con un asesor por WhatsApp.";
 
+// En el brochure el chatbot tapa los controles para pasar la hoja: ahí no se muestra.
 export default function ChatbotFlotante() {
+	const { pathname } = useLocation();
+	if (pathname.startsWith("/brochure")) return null;
+	return <ChatbotFlotanteContenido />;
+}
+
+function ChatbotFlotanteContenido() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [messages, setMessages] = useState([
 		{

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import BrochureEditor from "./BrochureEditor";
 import Modal from "./Modal";
 import Toast from "./Toast";
 import AjusteIPCPanel from "./AjusteIPCPanel";
@@ -569,13 +570,14 @@ export default function AdminPlanes() {
               <div className="flex gap-2 rounded-2xl bg-surface-2/80 p-1.5">
                 <button onClick={() => setTab("planes")} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${tab === "planes" ? "bg-brand text-white shadow" : "text-muted hover:text-content"}`}>Planes ({planes.length})</button>
                 <button onClick={() => setTab("propuestas")} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${tab === "propuestas" ? "bg-brand text-white shadow" : "text-muted hover:text-content"}`}>Propuestas ({propuestas.length})</button>
+                <button onClick={() => setTab("brochure")} className={`rounded-xl px-4 py-2 text-sm font-bold transition ${tab === "brochure" ? "bg-brand text-white shadow" : "text-muted hover:text-content"}`}>Brochure</button>
               </div>
             </div>
           </div>
         </header>
         {toast && <Toast {...toast} onClose={() => setToast(null)} />}
 
-        {tab === "planes" ? <>
+        {tab === "brochure" ? <BrochureEditor api={api} setToast={setToast} /> : tab === "planes" ? <>
           <form onSubmit={savePlan} className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg md:p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black text-content">{editId ? "Editar plan" : "Nuevo plan"}</h3>{editId && <button type="button" onClick={resetPlan} className="text-sm font-bold text-muted hover:text-content">Cancelar edición</button>}</div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

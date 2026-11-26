@@ -57,7 +57,10 @@ export default function PropuestaPublica() {
         <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-8 sm:px-6 md:pb-24">
           <div className="flex items-center justify-between">
             <div><div className="text-2xl font-black tracking-wide">ECONF<span className="text-violet-300">IA</span></div><div className="text-[10px] uppercase tracking-[0.3em] text-violet-200/80">Verificación · Antecedentes · Riesgo</div></div>
-            <button type="button" onClick={() => window.print()} className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold backdrop-blur transition hover:bg-white/20 print:hidden">Descargar / imprimir</button>
+            <div className="flex flex-wrap justify-end gap-2 print:hidden">
+              {data.brochure && <a href={`/brochure?propuesta=${encodeURIComponent(token)}`} className="rounded-xl bg-white px-4 py-2 text-xs font-black text-[#2c1470] transition hover:bg-violet-100">📖 Conoce Econfia</a>}
+              <button type="button" onClick={() => window.print()} className="rounded-xl border border-white/20 bg-white/10 px-4 py-2 text-xs font-bold backdrop-blur transition hover:bg-white/20">Descargar / imprimir</button>
+            </div>
           </div>
           <div className="mt-14 max-w-3xl md:mt-20">
             <div className="text-xs font-bold uppercase tracking-[0.3em] text-violet-200">Propuesta comercial N.º {data.numero}</div>
