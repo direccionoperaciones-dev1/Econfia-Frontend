@@ -154,6 +154,7 @@ export default function BrochureEditor({ api, setToast }) {
   const [vista, setVista] = useState("lienzo");
   const historial = useRef({ atras: [], adelante: [], ultimo: 0 });
   const contenidoRef = useRef(null);
+  const panelRef = useRef(null);
   const [, setPasos] = useState(0);
   const [selLienzo, setSelLienzo] = useState(null);
   const zonaVista = useRef(null);
@@ -204,7 +205,12 @@ export default function BrochureEditor({ api, setToast }) {
       const id = foco.item != null ? `bq-item-${foco.item}` : `bq-campo-${foco.campo}`;
       const el = document.getElementById(id) || document.getElementById(`bq-campo-${foco.campo}`);
       if (!el) return;
-      el.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      // Solo se desplaza el panel derecho: la página (y el lienzo) se quedan quietos.
+      const caja = panelRef.current;
+      if (caja && caja.contains(el) && caja.scrollHeight > caja.clientHeight) {
+        const arriba = el.getBoundingClientRect().top - caja.getBoundingClientRect().top + caja.scrollTop - 90;
+        caja.scrollTo?.({ top: Math.max(0, arriba), behavior: "smooth" });
+      }
       el.classList.add("ring-2", "ring-brand", "ring-offset-2");
       setTimeout(() => el.classList.remove("ring-2", "ring-brand", "ring-offset-2"), 1600);
       el.querySelector("input:not([type=file]):not([type=color]), textarea")?.focus({ preventScroll: true });
@@ -368,7 +374,7 @@ export default function BrochureEditor({ api, setToast }) {
         </div>
       </div>
 
-      <div className="rounded-[24px] border border-line/15 bg-surface/90 p-4 shadow-lg">
+      <div ref={panelRef} className="rounded-[24px] border border-line/15 bg-surface/90 p-4 shadow-lg xl:sticky xl:top-28 xl:max-h-[calc(100vh-8rem)] xl:self-start xl:overflow-y-auto">
         <div className="mb-4 flex gap-1 rounded-2xl bg-surface-2/80 p-1">
           <Pestana activa={panel === "pagina"} onClick={() => setPanel("pagina")} icono={Pencil}>Editar página</Pestana>
           <Pestana activa={panel === "paginas"} onClick={() => setPanel("paginas")} icono={Layers}>Páginas</Pestana>

@@ -124,7 +124,7 @@ export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, o
     }
     let dx = (ev.clientX - a.x) / e;
     let dy = (ev.clientY - a.y) / e;
-    if (!a.movido && Math.hypot(dx, dy) < 2) return;
+    if (!a.movido && Math.hypot(dx, dy) < 4) return; // un clic con pulso no mueve el bloque
     a.movido = true;
     if (a.modo === "mover" && a.rect && !ev.altKey) {
       const ix = imantar(a.rect.x + dx, a.rect.w, a.gx);

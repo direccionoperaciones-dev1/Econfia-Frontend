@@ -275,3 +275,24 @@ describe("Más fácil: deshacer, girar e imán", () => {
     expect(onCambiar).toHaveBeenLastCalledWith(expect.objectContaining({ elementos: [expect.objectContaining({ x: 50 })] }));
   });
 });
+
+describe("Editar sin que la página salte", () => {
+  it("al seleccionar en el lienzo no desplaza la página, solo enfoca el campo", async () => {
+    ancho = 1300;
+    const scrollIntoView = jest.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    const scrollTo = jest.spyOn(window, "scrollTo").mockImplementation(() => {});
+    const api = jest.fn(async () => ({ contenido: null, publicado: true }));
+    const { container } = render(<BrochureEditor api={api} setToast={jest.fn()} />);
+    await screen.findByText("Página 1 de 10");
+    const subtitulo = container.querySelector('.bq-lienzo [data-campo="subtitulo"]');
+    document.elementsFromPoint = () => [subtitulo];
+    const capa = screen.getByTestId("capa-lienzo");
+    fireEvent.pointerDown(capa, { button: 0, clientX: 50, clientY: 50, pointerId: 9 });
+    fireEvent.pointerUp(capa, { pointerId: 9 });
+    await waitFor(() => expect(document.activeElement?.closest("#bq-campo-subtitulo")).not.toBeNull());
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
+    scrollTo.mockRestore();
+  });
+});

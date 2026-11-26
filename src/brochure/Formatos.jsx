@@ -117,7 +117,13 @@ export function Infografia({ contenido, irA = null, alto = "100%", onEditar }) {
     // `listo`: las páginas solo existen cuando ya se midió el ancho; antes no hay nada que observar.
   }, [paginas, listo]);
 
-  const ir = useCallback((i) => refs.current[i]?.scrollIntoView?.({ behavior: "smooth", block: "start" }), []);
+  // Se desplaza solo la tira (no toda la página donde está incrustada).
+  const ir = useCallback((i) => {
+    const caja = marco.current;
+    const el = refs.current[i];
+    if (!caja || !el) return;
+    caja.scrollTo?.({ top: el.getBoundingClientRect().top - caja.getBoundingClientRect().top + caja.scrollTop - 12, behavior: "smooth" });
+  }, []);
   useEffect(() => { if (irA != null) ir(irA); }, [irA, ir]);
 
   return <div className="h-full w-full" style={{ ...variablesTema(tema), height: alto }}>
