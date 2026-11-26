@@ -11,7 +11,7 @@ import { ANIMACIONES_ELEMENTO, FORMAS, TIPOS_ELEMENTO, elementoNuevo } from "../
 
 const inputClass = "w-full rounded-xl border border-line/20 bg-surface-2/60 px-3 py-2 text-sm text-content outline-none transition focus:border-brand";
 const redondo = (n) => Math.round(n);
-const NOMBRES = { ...ETIQUETAS_CAMPO, logo: "Logo", items: "Tarjeta", puntos: "Viñetas", boton: "Botón", imagen: "Imagen", titulo: "Título" };
+const NOMBRES = { ...ETIQUETAS_CAMPO, logo: "Logo", items: "Tarjeta", puntos: "Viñetas", boton: "Botón", imagen: "Imagen", titulo: "Título", indice: "Línea del índice", lista: "Lista del índice" };
 const AGREGAR = [["texto", Type], ["imagen", ImageIcon], ["icono", Smile], ["forma", Shapes], ["grafica", BarChart3]];
 const IMAN = 6; // px de diseño: a esta distancia se pega a una guía
 const MARGEN = 44;

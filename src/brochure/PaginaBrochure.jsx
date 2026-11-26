@@ -175,21 +175,33 @@ function TextoImagen({ pagina, tema, numero, adorno }) {
   </div>;
 }
 
+// Páginas que salen en el índice (las que no son portada/índice y no se ocultaron).
+export const entradasIndice = (paginas) => paginas.map((p, i) => ({ p, i }))
+  .filter(({ p }) => p.tipo !== "portada" && p.tipo !== "indice" && p.tipo !== "blanca" && p.en_indice !== false);
+
 function Indice({ pagina, tema, numero, paginas, onIr, adorno }) {
   const aj = useAj();
-  const entradas = paginas.map((p, i) => ({ p, i })).filter(({ p }) => p.tipo !== "portada" && p.tipo !== "indice" && p.tipo !== "blanca");
+  const entradas = entradasIndice(paginas);
+  // Se acomoda al espacio: con muchas páginas las líneas se compactan y, si no cabe, se quita la imagen.
+  const n = Math.max(1, entradas.length);
+  const conImagen = Boolean(enlaceSeguro(pagina.imagen)) && n <= 8;
+  const disponible = conImagen ? 400 : 580;
+  const alto = Math.max(26, Math.min(54, Math.floor(disponible / n) - 7));
+  const conSubtitulo = alto >= 44;
   return <div className="bq-claro relative isolate h-full p-11">
     {adorno}
-    <Imagen src={pagina.imagen} alto={150} className="mb-7 rounded-[22px] shadow-lg" />
+    {conImagen && <Imagen src={pagina.imagen} alto={150} className="mb-7 rounded-[22px] shadow-lg" />}
     <h2 data-campo="titulo" style={aj("titulo")} className="bq-titulo text-[30px] font-extrabold">{pagina.titulo || "Contenido"}</h2>
     <div className="mt-4 h-1 w-14 rounded-full" style={{ background: "var(--b-primario)" }} />
-    <div className="mt-6 grid gap-2">
-      {entradas.map(({ p, i }) => <button key={p.id || i} type="button" onClick={(e) => { e.stopPropagation(); onIr?.(i); }}
-        className="bq-cajon group flex items-center gap-4 rounded-2xl px-4 py-2.5 text-left">
-        <span className="bq-valor text-[20px] font-black tabular-nums">{String(i + 1).padStart(2, "0")}</span>
-        <span className="min-w-0 flex-1"><span className="block truncate text-[13px] font-bold">{p.titulo}</span>{p.kicker && <span className="bq-suave block truncate text-[10.5px] opacity-50">{p.kicker}</span>}</span>
-        <ArrowUpRight size={16} className="opacity-40 transition group-hover:opacity-100" />
-      </button>)}
+    <div data-campo="lista" style={aj("lista")} className="mt-6 grid" >
+      <div className="grid" style={{ gap: alto >= 44 ? 8 : 5 }}>
+        {entradas.map(({ p, i }, k) => <button key={p.id || i} type="button" data-campo="indice" data-item={k} onClick={(e) => { e.stopPropagation(); onIr?.(i); }}
+          className="bq-cajon group flex items-center gap-4 rounded-2xl px-4 text-left" style={{ height: alto, ...aj("indice", k) }}>
+          <span className="bq-valor font-black tabular-nums" style={{ fontSize: Math.min(20, Math.round(alto * 0.42)) }}>{String(i + 1).padStart(2, "0")}</span>
+          <span className="min-w-0 flex-1"><span className="block truncate font-bold" style={{ fontSize: alto >= 40 ? 13 : 12 }}>{p.titulo}</span>{conSubtitulo && p.kicker && <span className="bq-suave block truncate text-[10.5px] opacity-50">{p.kicker}</span>}</span>
+          <ArrowUpRight size={alto >= 40 ? 16 : 13} className="opacity-40 transition group-hover:opacity-100" />
+        </button>)}
+      </div>
     </div>
     <Pie numero={numero} tema={tema} claro />
   </div>;

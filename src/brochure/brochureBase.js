@@ -57,7 +57,7 @@ export const TRANSICIONES_VIDEO = { zoom: "Acercamiento", fundido: "Fundido", de
 export const TIPOS_PAGINA = {
   portada: { nombre: "Portada", campos: ["kicker", "titulo", "destacado", "subtitulo", "imagen", "etiqueta"] },
   texto_imagen: { nombre: "Texto + imagen", campos: ["kicker", "titulo", "texto", "puntos", "imagen", "posicion_imagen", "fondo"] },
-  indice: { nombre: "Índice (automático)", campos: ["titulo", "imagen"] },
+  indice: { nombre: "Índice (automático)", campos: ["titulo", "entradas", "imagen"] },
   tarjetas: { nombre: "Tarjetas (productos, beneficios)", campos: ["kicker", "titulo", "texto", "items", "fondo"], item: ["icono", "titulo", "texto"] },
   cifras: { nombre: "Cifras", campos: ["kicker", "titulo", "texto", "items", "imagen", "fondo"], item: ["valor", "titulo", "texto"] },
   pasos: { nombre: "Pasos / proceso", campos: ["kicker", "titulo", "texto", "items", "fondo"], item: ["titulo", "texto"] },
@@ -65,7 +65,7 @@ export const TIPOS_PAGINA = {
 };
 
 export const ETIQUETAS_CAMPO = {
-  kicker: "Antetítulo (pequeño, arriba)", titulo: "Título", destacado: "Palabra destacada en color", subtitulo: "Subtítulo",
+  entradas: "Líneas del índice", kicker: "Antetítulo (pequeño, arriba)", titulo: "Título", destacado: "Palabra destacada en color", subtitulo: "Subtítulo",
   texto: "Texto", puntos: "Viñetas (una por línea)", imagen: "Imagen", posicion_imagen: "Imagen arriba o abajo",
   fondo: "Fondo", etiqueta: "Sello (ej. año)", items: "Elementos", boton: "Botón",
   icono: "Ícono", valor: "Cifra", enlace: "Enlace (https://, mailto:, tel:)",

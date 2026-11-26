@@ -85,7 +85,27 @@ function EditorItems({ tipo, items, onChange }) {
   </div>;
 }
 
-function EditorPagina({ pagina, onChange, subir }) {
+// Líneas del índice: cada página con su título (editable aquí) y si se muestra o no.
+function EditorEntradas({ paginas, onCambiarPagina }) {
+  const lista = paginas.map((p, i) => ({ p, i })).filter(({ p }) => p.tipo !== "portada" && p.tipo !== "indice" && p.tipo !== "blanca");
+  let k = -1;
+  return <div className="space-y-1.5">
+    {lista.map(({ p, i }) => {
+      const visible = p.en_indice !== false;
+      if (visible) k += 1;
+      return <div key={p.id || i} id={visible ? `bq-item-${k}` : undefined} className={`flex items-center gap-2 rounded-xl border border-line/15 p-2 transition-shadow ${visible ? "" : "opacity-50"}`}>
+        <span className="w-6 text-center text-xs font-black text-muted">{String(i + 1).padStart(2, "0")}</span>
+        <input className={inputClass} value={p.titulo || ""} onChange={(e) => onCambiarPagina(i, { ...p, titulo: e.target.value })} aria-label={`Título de la página ${i + 1}`} />
+        <label className="flex shrink-0 items-center gap-1 text-[11px] font-bold text-muted" title="Mostrar esta página en el índice">
+          <input type="checkbox" checked={visible} onChange={(e) => onCambiarPagina(i, { ...p, en_indice: e.target.checked })} />Mostrar
+        </label>
+      </div>;
+    })}
+    <p className="text-[11px] text-muted">El orden sigue el de las páginas (pestaña «Páginas»). Al agregar una página nueva, aparece aquí sola.</p>
+  </div>;
+}
+
+function EditorPagina({ pagina, onChange, subir, paginas = [], onCambiarPagina }) {
   const tipo = TIPOS_PAGINA[pagina.tipo];
   if (!tipo) return null;
   const poner = (campo, valor) => onChange({ ...pagina, [campo]: valor });
@@ -93,6 +113,7 @@ function EditorPagina({ pagina, onChange, subir }) {
     {tipo.campos.map((campo) => {
       const label = ETIQUETAS_CAMPO[campo] || campo;
       const props = { id: `bq-campo-${campo}`, label, ayuda: AYUDAS_CAMPO[campo] };
+      if (campo === "entradas") return <Campo key={campo} {...props}><EditorEntradas paginas={paginas} onCambiarPagina={onCambiarPagina} /></Campo>;
       if (campo === "imagen") return <Campo key={campo} {...props}><CampoImagen valor={pagina.imagen} onChange={(v) => poner("imagen", v)} subir={subir} /></Campo>;
       if (campo === "items") return <Campo key={campo} {...props}><EditorItems tipo={pagina.tipo} items={pagina.items || []} onChange={(v) => poner("items", v)} /></Campo>;
       if (campo === "fondo") return <Campo key={campo} {...props}><select className={inputClass} value={pagina.fondo || "claro"} onChange={(e) => poner("fondo", e.target.value)}><option value="claro">Claro</option><option value="oscuro">Oscuro (color principal)</option></select></Campo>;
@@ -394,8 +415,8 @@ export default function BrochureEditor({ api, setToast }) {
             </div>
             <PanelElemento el={elementoElegido} onChange={ponerElemento} CampoImagen={CampoImagen} subir={subir} />
           </div> : <>
-            {pagina.tipo === "indice" && <p className="mb-3 rounded-xl bg-surface-2/60 p-3 text-xs text-muted">El índice se arma solo con los títulos de las demás páginas, y cada línea lleva a su página.</p>}
-            <EditorPagina pagina={pagina} onChange={(p) => ponerPagina(seleccion, p)} subir={subir} />
+            {pagina.tipo === "indice" && <p className="mb-3 rounded-xl bg-surface-2/60 p-3 text-xs text-muted">El índice se arma solo con los títulos de las demás páginas y cada línea lleva a su página. En el lienzo puedes mover cada línea o la lista completa; aquí cambias los títulos y cuáles se muestran.</p>}
+            <EditorPagina pagina={pagina} onChange={(p) => ponerPagina(seleccion, p)} subir={subir} paginas={paginas} onCambiarPagina={ponerPagina} />
           </>}
         </div>}
 

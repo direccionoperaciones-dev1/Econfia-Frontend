@@ -296,3 +296,43 @@ describe("Editar sin que la página salte", () => {
     scrollTo.mockRestore();
   });
 });
+
+describe("Índice editable", () => {
+  const tema = BROCHURE_POR_DEFECTO.tema;
+  const paginas = BROCHURE_POR_DEFECTO.paginas;
+
+  it("con muchas páginas se compacta y quita la imagen para que todo quepa", () => {
+    const { container } = render(<BrochureLienzo pagina={paginas[2]} tema={tema} indice={2} paginas={paginas} ancho={560} onCambiar={jest.fn()} seleccion={null} onSeleccion={jest.fn()} />);
+    const lineas = container.querySelectorAll('[data-campo="indice"]');
+    expect(lineas).toHaveLength(8);
+    expect(screen.getByText("Empieza hoy con Econfia")).toBeInTheDocument();
+    // 8 líneas: alto compacto; la imagen se mantiene hasta 8.
+    expect(parseInt(lineas[0].style.height, 10)).toBeLessThanOrEqual(54);
+  });
+
+  it("una línea del índice se selecciona y se mueve en el lienzo", () => {
+    const onCambiar = jest.fn();
+    const onSeleccion = jest.fn();
+    const { container } = render(<BrochureLienzo pagina={paginas[2]} tema={tema} indice={2} paginas={paginas} ancho={560} onCambiar={onCambiar} seleccion={null} onSeleccion={onSeleccion} />);
+    const linea = container.querySelectorAll('[data-campo="indice"]')[1];
+    document.elementsFromPoint = () => [linea];
+    const capa = screen.getByTestId("capa-lienzo");
+    fireEvent.pointerDown(capa, { button: 0, clientX: 0, clientY: 0, pointerId: 5, altKey: true });
+    expect(onSeleccion).toHaveBeenCalledWith({ tipo: "campo", campo: "indice", item: 1 });
+    fireEvent.pointerMove(capa, { clientX: 0, clientY: 30, pointerId: 5, altKey: true });
+    expect(onCambiar).toHaveBeenLastCalledWith(expect.objectContaining({ ajustes: { "indice.1": { x: 0, y: 30, s: 1 } } }));
+  });
+
+  it("desde el panel se oculta una página del índice y se cambia su título", async () => {
+    ancho = 1300;
+    const api = jest.fn(async () => ({ contenido: null, publicado: true }));
+    const { container } = render(<BrochureEditor api={api} setToast={jest.fn()} />);
+    await screen.findByText("Página 1 de 10");
+    fireEvent.click(screen.getByRole("button", { name: "Editar la página 3" }));
+    fireEvent.change(screen.getByLabelText("Título de la página 2"), { target: { value: "Bienvenidos" } });
+    expect(screen.getAllByText("Bienvenidos").length).toBeGreaterThan(0);
+    const antes = container.querySelectorAll('.bq-lienzo [data-campo="indice"]').length;
+    fireEvent.click(screen.getAllByRole("checkbox", { name: /Mostrar/ })[0]);
+    expect(container.querySelectorAll('.bq-lienzo [data-campo="indice"]')).toHaveLength(antes - 1);
+  });
+});
