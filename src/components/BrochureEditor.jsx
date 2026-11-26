@@ -1,8 +1,11 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowDown, ArrowUp, BookOpen, ChevronLeft, ChevronRight, Clapperboard, Columns3, Copy, ExternalLink, ImagePlus,
-  Layers, Link2, MousePointerClick, Palette, Pencil, Plus, RotateCcw, Save, ScrollText, Trash2, X,
+  Layers, Link2, MousePointerClick, Palette, Pencil, Plus, Redo2, RotateCcw, Save, ScrollText, Trash2, Undo2, Wand2, X,
 } from "lucide-react";
+import BrochureLienzo, { PanelElemento } from "./BrochureLienzo";
+import { FONDOS_ANIMADOS, FONDOS_BASE } from "../brochure/Fondos";
+import { TIPOS_ELEMENTO } from "../brochure/Elementos";
 import VisorBrochure from "../brochure/Formatos";
 import PaginaBrochure, { Adorno, EstilosBrochure } from "../brochure/PaginaBrochure";
 import {
@@ -103,6 +106,26 @@ function EditorPagina({ pagina, onChange, subir }) {
       </Campo>;
       return <Campo key={campo} {...props}><input className={inputClass} value={pagina[campo] || ""} onChange={(e) => poner(campo, e.target.value)} /></Campo>;
     })}
+    <div id="bq-campo-fondo" className="space-y-3 rounded-2xl border border-line/15 p-3 transition-shadow">
+      <div className="text-xs font-black text-content">Fondo de la página <span className="font-normal text-muted">(se pueden combinar: base + animación + adorno)</span></div>
+      <Campo label="Base">
+        <select className={inputClass} value={pagina.fondo_base || "plantilla"} onChange={(e) => poner("fondo_base", e.target.value)}>{Object.entries(FONDOS_BASE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+      </Campo>
+      {(pagina.fondo_base === "color" || pagina.fondo_base === "degradado") && <div className="grid grid-cols-2 gap-2">
+        <label className="flex items-center gap-2 rounded-xl border border-line/15 p-2 text-xs font-bold text-content"><input type="color" value={pagina.fondo_color || "#2c1470"} onChange={(e) => poner("fondo_color", e.target.value)} className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0" aria-label="Color 1" />{pagina.fondo_base === "color" ? "Color" : "Color 1"}</label>
+        {pagina.fondo_base === "degradado" && <label className="flex items-center gap-2 rounded-xl border border-line/15 p-2 text-xs font-bold text-content"><input type="color" value={pagina.fondo_color2 || "#0d0724"} onChange={(e) => poner("fondo_color2", e.target.value)} className="h-8 w-10 cursor-pointer rounded border-0 bg-transparent p-0" aria-label="Color 2" />Color 2</label>}
+        {pagina.fondo_base === "degradado" && <Campo label={`Ángulo: ${pagina.fondo_angulo ?? 160}°`}><input type="range" min="0" max="360" value={pagina.fondo_angulo ?? 160} onChange={(e) => poner("fondo_angulo", Number(e.target.value))} className="w-full" /></Campo>}
+      </div>}
+      {pagina.fondo_base === "imagen" && <>
+        <CampoImagen valor={pagina.fondo_imagen} onChange={(v) => poner("fondo_imagen", v)} subir={subir} />
+        <Campo label={`Oscurecer la imagen: ${pagina.fondo_oscurecer ?? 45}%`}><input type="range" min="0" max="90" value={pagina.fondo_oscurecer ?? 45} onChange={(e) => poner("fondo_oscurecer", Number(e.target.value))} className="w-full" /></Campo>
+      </>}
+      {pagina.fondo_base && pagina.fondo_base !== "plantilla" && TIPOS_PAGINA[pagina.tipo]?.campos.includes("fondo") && <p className="text-[11px] text-muted">Si el fondo es oscuro, elige «Fondo: Oscuro» arriba para que el texto se vea claro.</p>}
+      <Campo label="Animación">
+        <select className={inputClass} value={pagina.animacion_fondo || "ninguna"} onChange={(e) => poner("animacion_fondo", e.target.value)}>{Object.entries(FONDOS_ANIMADOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
+      </Campo>
+      {pagina.animacion_fondo && pagina.animacion_fondo !== "ninguna" && <Campo label={`Intensidad de la animación: ${pagina.animacion_intensidad ?? 60}%`}><input type="range" min="10" max="100" value={pagina.animacion_intensidad ?? 60} onChange={(e) => poner("animacion_intensidad", Number(e.target.value))} className="w-full" /></Campo>}
+    </div>
     <Campo id="bq-campo-adorno" label="Adorno de esta página" ayuda="Por defecto usa el adorno general (pestaña Diseño).">
       <select className={inputClass} value={pagina.adorno || "general"} onChange={(e) => poner("adorno", e.target.value)}>
         <option value="general">Igual que el general</option>
@@ -128,6 +151,24 @@ export default function BrochureEditor({ api, setToast }) {
   const [guardando, setGuardando] = useState(false);
   const [cambios, setCambios] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState("tarjetas");
+  const [vista, setVista] = useState("lienzo");
+  const historial = useRef({ atras: [], adelante: [], ultimo: 0 });
+  const contenidoRef = useRef(null);
+  const [, setPasos] = useState(0);
+  const [selLienzo, setSelLienzo] = useState(null);
+  const zonaVista = useRef(null);
+  const [anchoZona, setAnchoZona] = useState(600);
+  useLayoutEffect(() => {
+    const el = zonaVista.current;
+    if (!el) return undefined;
+    const medir = () => setAnchoZona(el.clientWidth || 600);
+    medir();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
+  useEffect(() => { setSelLienzo(null); }, [seleccion]);
   const [guia, setGuia] = useState(() => { try { return !localStorage.getItem(GUIA_KEY); } catch { return true; } });
 
   useEffect(() => {
@@ -144,6 +185,18 @@ export default function BrochureEditor({ api, setToast }) {
     return () => window.removeEventListener("beforeunload", aviso);
   }, [cambios]);
 
+  useEffect(() => {
+    const tecla = (ev) => {
+      if (!(ev.ctrlKey || ev.metaKey)) return;
+      if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "")) return;
+      const k = ev.key.toLowerCase();
+      if (k === "z" && !ev.shiftKey) { ev.preventDefault(); deshacerRef.current(); }
+      else if (k === "y" || (k === "z" && ev.shiftKey)) { ev.preventDefault(); rehacerRef.current(); }
+    };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, []);
+
   // Al hacer clic en algo del brochure: lleva al campo, lo resalta y lo enfoca.
   useEffect(() => {
     if (!foco) return undefined;
@@ -159,9 +212,39 @@ export default function BrochureEditor({ api, setToast }) {
     return () => clearTimeout(t);
   }, [foco]);
 
+  contenidoRef.current = contenido;
   const paginas = contenido?.paginas || [];
   const tema = { ...TEMA_POR_DEFECTO, ...(contenido?.tema || {}) };
-  const actualizar = (fn) => { setContenido((c) => fn(copia(c))); setCambios(true); };
+  // Historial para deshacer/rehacer. Los cambios seguidos (un arrastre, escribir) cuentan como uno solo.
+  // El historial se toca FUERA de setContenido: React (modo estricto) puede llamar dos veces
+  // a la función que actualiza el estado y un "deshacer" saltaría dos pasos.
+  const actualizar = (fn) => {
+    const h = historial.current;
+    const ahora = Date.now();
+    if (ahora - h.ultimo > 700) { h.atras = [...h.atras.slice(-79), contenidoRef.current]; h.adelante = []; }
+    h.ultimo = ahora;
+    setContenido((c) => fn(copia(c)));
+    setCambios(true);
+    setPasos((n) => n + 1);
+  };
+  const deshacer = () => {
+    const h = historial.current;
+    if (!h.atras.length) return;
+    h.adelante = [contenidoRef.current, ...h.adelante];
+    const previo = h.atras[h.atras.length - 1];
+    h.atras = h.atras.slice(0, -1);
+    h.ultimo = 0;
+    setContenido(previo); setCambios(true); setPasos((n) => n + 1);
+  };
+  const rehacer = () => {
+    const h = historial.current;
+    if (!h.adelante.length) return;
+    h.atras = [...h.atras, contenidoRef.current];
+    const siguiente = h.adelante[0];
+    h.adelante = h.adelante.slice(1);
+    h.ultimo = 0;
+    setContenido(siguiente); setCambios(true); setPasos((n) => n + 1);
+  };
   const ponerTema = (campo, valor) => actualizar((c) => ({ ...c, tema: { ...TEMA_POR_DEFECTO, ...(c.tema || {}), [campo]: valor } }));
   const ponerPagina = (i, pagina) => actualizar((c) => { c.paginas[i] = pagina; return c; });
   const moverPagina = (i, d) => { actualizar((c) => { [c.paginas[i], c.paginas[i + d]] = [c.paginas[i + d], c.paginas[i]]; return c; }); setSeleccion(i + d); };
@@ -174,6 +257,14 @@ export default function BrochureEditor({ api, setToast }) {
   };
   const agregar = () => { actualizar((c) => { c.paginas.splice(seleccion + 1, 0, paginaNueva(nuevoTipo)); return c; }); setSeleccion(seleccion + 1); setPanel("pagina"); };
   const elegirPagina = (i) => { setSeleccion(i); setPanel("pagina"); };
+
+  const alSeleccionarLienzo = (sel) => {
+    setSelLienzo(sel);
+    if (!sel) return;
+    if (sel.tipo === "campo" && sel.campo === "logo") { setPanel("diseno"); setFoco({ campo: "logos", n: Date.now() }); return; }
+    setPanel("pagina");
+    if (sel.tipo === "campo") setFoco({ campo: sel.campo, item: sel.item, n: Date.now() });
+  };
 
   const alEditar = (indice, campo, item) => {
     if (indice >= paginas.length) return; // contraportada automática
@@ -202,14 +293,21 @@ export default function BrochureEditor({ api, setToast }) {
     finally { setGuardando(false); }
   };
 
+  const deshacerRef = useRef(deshacer);
+  const rehacerRef = useRef(rehacer);
+  deshacerRef.current = deshacer;
+  rehacerRef.current = rehacer;
+
   const restaurar = () => {
     if (!window.confirm("¿Volver al borrador original de Econfia? Perderás los cambios que no hayas guardado (lo guardado sigue igual hasta que guardes).")) return;
-    setContenido(copia(BROCHURE_POR_DEFECTO)); setSeleccion(0); setCambios(true);
+    actualizar(() => copia(BROCHURE_POR_DEFECTO)); setSeleccion(0); // también se puede deshacer
   };
   const cerrarGuia = () => { setGuia(false); try { localStorage.setItem(GUIA_KEY, "1"); } catch { /* sin almacenamiento */ } };
 
   if (!contenido) return <div className="rounded-[24px] border border-line/15 bg-surface/90 p-10 text-center text-muted">Cargando brochure…</div>;
   const pagina = paginas[seleccion] || paginas[0];
+  const elementoElegido = selLienzo?.tipo === "elemento" ? (pagina?.elementos || []).find((x) => x.id === selLienzo.id) : null;
+  const ponerElemento = (el) => ponerPagina(seleccion, { ...pagina, elementos: (pagina.elementos || []).map((x) => (x.id === el.id ? el : x)) });
   const fondoVista = `radial-gradient(circle at 80% 0%, ${tema.color_primario}cc, transparent 55%), ${tema.color_oscuro}`;
 
   return <div className="space-y-4">
@@ -222,6 +320,8 @@ export default function BrochureEditor({ api, setToast }) {
         <label className="flex items-center gap-2 rounded-xl border border-line/15 px-3 py-2 text-sm font-bold text-content" title="Si lo desmarcas, el brochure y sus botones dejan de verse"><input type="checkbox" checked={publicado} onChange={(e) => { setPublicado(e.target.checked); setCambios(true); }} />Publicado</label>
         <button type="button" onClick={() => { navigator.clipboard?.writeText(`${window.location.origin}/brochure`); setToast({ type: "success", message: "Enlace copiado." }); }} className="inline-flex items-center gap-1.5 rounded-xl border border-line/15 px-3 py-2 text-sm font-bold text-content"><Link2 size={15} />Copiar enlace</button>
         <a href="/brochure" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 rounded-xl border border-line/15 px-3 py-2 text-sm font-bold text-content"><ExternalLink size={15} />Ver publicado</a>
+        <button type="button" onClick={deshacer} disabled={!historial.current.atras.length} title="Deshacer (Ctrl+Z)" aria-label="Deshacer" className="inline-flex items-center gap-1.5 rounded-xl border border-line/15 px-3 py-2 text-sm font-bold text-content disabled:opacity-40"><Undo2 size={15} />Deshacer</button>
+        <button type="button" onClick={rehacer} disabled={!historial.current.adelante.length} title="Rehacer (Ctrl+Y)" aria-label="Rehacer" className="inline-flex items-center gap-1.5 rounded-xl border border-line/15 px-3 py-2 text-sm font-bold text-content disabled:opacity-40"><Redo2 size={15} /></button>
         <button type="button" onClick={restaurar} className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-bold text-muted hover:text-content" title="Vuelve al diseño inicial de Econfia"><RotateCcw size={15} />Borrador original</button>
         <button type="button" onClick={guardar} disabled={guardando || !cambios} className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2 text-sm font-black text-white shadow disabled:opacity-50"><Save size={15} />{guardando ? "Guardando…" : cambios ? "Guardar cambios" : "Guardado"}</button>
       </div>
@@ -231,8 +331,8 @@ export default function BrochureEditor({ api, setToast }) {
       <button type="button" onClick={cerrarGuia} aria-label="Cerrar guía" className="absolute right-3 top-3 rounded-full p-1 text-muted hover:text-content"><X size={16} /></button>
       <div className="mb-3 font-black text-content">Así se edita, en 3 pasos</div>
       <div className="grid gap-3 md:grid-cols-3">
-        {[[MousePointerClick, "1. Haz clic en el brochure", "Toca el título, un texto, una imagen o una tarjeta y se abre su campo a la derecha."],
-          [Pencil, "2. Cambia lo que quieras", "Lo ves al instante en la vista previa. En «Diseño» eliges formato, colores y adornos."],
+        {[[MousePointerClick, "1. Toca y arrastra", "En el lienzo, haz clic en cualquier cosa para editarla; arrástrala para moverla y usa la esquina para cambiar su tamaño."],
+          [Pencil, "2. Agrega y decora", "Suma textos, imágenes, íconos, formas o gráficas; cambia el fondo (incluso animado). En «Diseño», formato y colores."],
           [Save, "3. Guarda", "Con «Guardar cambios» tus clientes lo ven así en el correo y en su propuesta."]].map(([Icono, t, d]) =>
           <div key={t} className="flex gap-3"><span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-brand text-white"><Icono size={17} /></span><span><span className="block text-sm font-bold text-content">{t}</span><span className="block text-xs text-muted">{d}</span></span></div>)}
       </div>
@@ -241,18 +341,28 @@ export default function BrochureEditor({ api, setToast }) {
     <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_440px]">
       <div className="space-y-3 xl:sticky xl:top-28 xl:self-start">
         <div className="overflow-hidden rounded-[24px] border border-line/15 shadow-lg" style={{ background: fondoVista }}>
-          <div className="flex items-center justify-between px-5 pt-4 text-[11px] font-bold uppercase tracking-[0.2em] text-white/60">
-            <span>Vista previa · {FORMATOS[tema.formato]?.nombre || "Revista"}</span>
-            <span className="normal-case tracking-normal text-white/50">Haz clic en cualquier parte para editarla</span>
+          <div ref={zonaVista} className="flex flex-wrap items-center justify-between gap-2 px-5 pt-4">
+            <div className="flex gap-1 rounded-xl bg-black/30 p-1">
+              <button type="button" onClick={() => setVista("lienzo")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold ${vista === "lienzo" ? "bg-white text-[#2c1470]" : "text-white/70 hover:text-white"}`}><Wand2 size={14} />Diseñar (lienzo)</button>
+              <button type="button" onClick={() => setVista("libro")} className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold ${vista === "libro" ? "bg-white text-[#2c1470]" : "text-white/70 hover:text-white"}`}><BookOpen size={14} />Ver como {FORMATOS[tema.formato]?.nombre.toLowerCase() || "revista"}</button>
+            </div>
+            {vista === "lienzo" && <div className="flex items-center gap-2 text-xs font-bold text-white">
+              <button type="button" disabled={seleccion === 0} onClick={() => setSeleccion(seleccion - 1)} className="rounded-lg bg-white/10 p-1.5 disabled:opacity-30" aria-label="Página anterior del lienzo"><ChevronLeft size={16} /></button>
+              <span className="tabular-nums">{seleccion + 1} / {paginas.length}</span>
+              <button type="button" disabled={seleccion === paginas.length - 1} onClick={() => setSeleccion(seleccion + 1)} className="rounded-lg bg-white/10 p-1.5 disabled:opacity-30" aria-label="Página siguiente del lienzo"><ChevronRight size={16} /></button>
+            </div>}
           </div>
-          <VisorBrochure contenido={contenido} irA={seleccion} alto="min(70vh, 700px)" onEditar={alEditar} />
+          {vista === "lienzo"
+            ? <div className="px-4 pb-4 pt-3"><BrochureLienzo pagina={pagina} tema={tema} indice={seleccion} paginas={paginas} ancho={Math.max(260, Math.min(anchoZona - 40, 560))}
+                onCambiar={(p) => ponerPagina(seleccion, p)} seleccion={selLienzo} onSeleccion={alSeleccionarLienzo} /></div>
+            : <VisorBrochure contenido={contenido} irA={seleccion} alto="min(70vh, 700px)" onEditar={alEditar} />}
         </div>
         <div className="flex gap-2 overflow-x-auto rounded-[20px] border border-line/15 bg-surface/90 p-2" style={variablesTema(tema)}>
           <EstilosBrochure />
           {paginas.map((p, i) => <div key={p.id || i} role="button" tabIndex={0} aria-label={`Editar la página ${i + 1}`} onClick={() => elegirPagina(i)}
             onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); elegirPagina(i); } }} title={p.titulo}
             className={`shrink-0 cursor-pointer overflow-hidden rounded-lg border-2 transition ${i === seleccion ? "border-brand shadow-lg" : "border-transparent opacity-70 hover:opacity-100"}`}>
-            <div className="pointer-events-none" inert="">{/* miniatura: sin botones activos dentro */}<PaginaBrochure pagina={p} tema={tema} numero={i + 1} paginas={paginas} ancho={62} /></div>
+            <div className="pointer-events-none" inert="">{/* miniatura: sin botones activos dentro */}<PaginaBrochure pagina={p} tema={tema} numero={i + 1} paginas={paginas} ancho={62} estatico /></div>
             <div className="bg-surface-2 py-0.5 text-center text-[10px] font-bold text-muted">{i + 1}</div>
           </div>)}
         </div>
@@ -271,8 +381,16 @@ export default function BrochureEditor({ api, setToast }) {
             <div className="text-center"><div className="text-sm font-black text-content">Página {seleccion + 1} de {paginas.length}</div><div className="text-[11px] text-muted">{TIPOS_PAGINA[pagina.tipo]?.nombre}</div></div>
             <button type="button" disabled={seleccion === paginas.length - 1} onClick={() => setSeleccion(seleccion + 1)} className="rounded-lg p-1.5 text-muted hover:bg-surface-2 disabled:opacity-30" aria-label="Página siguiente"><ChevronRight size={18} /></button>
           </div>
-          {pagina.tipo === "indice" && <p className="mb-3 rounded-xl bg-surface-2/60 p-3 text-xs text-muted">El índice se arma solo con los títulos de las demás páginas, y cada línea lleva a su página.</p>}
-          <EditorPagina pagina={pagina} onChange={(p) => ponerPagina(seleccion, p)} subir={subir} />
+          {elementoElegido ? <div>
+            <div className="mb-3 flex items-center justify-between rounded-xl bg-brand/10 px-3 py-2">
+              <span className="text-sm font-black text-content">{TIPOS_ELEMENTO[elementoElegido.tipo]} seleccionado</span>
+              <button type="button" onClick={() => setSelLienzo(null)} className="text-xs font-bold text-brand hover:underline">Ver campos de la página</button>
+            </div>
+            <PanelElemento el={elementoElegido} onChange={ponerElemento} CampoImagen={CampoImagen} subir={subir} />
+          </div> : <>
+            {pagina.tipo === "indice" && <p className="mb-3 rounded-xl bg-surface-2/60 p-3 text-xs text-muted">El índice se arma solo con los títulos de las demás páginas, y cada línea lleva a su página.</p>}
+            <EditorPagina pagina={pagina} onChange={(p) => ponerPagina(seleccion, p)} subir={subir} />
+          </>}
         </div>}
 
         {panel === "paginas" && <div>
