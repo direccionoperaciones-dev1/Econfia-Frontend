@@ -2,8 +2,8 @@
 // selecciona, arrastra y cambia de tamaño cualquier bloque, y se agregan elementos libres.
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  AlignHorizontalJustifyCenter, BarChart3, BringToFront, Copy, Image as ImageIcon, MoveDiagonal2, RotateCcw, RotateCw, SendToBack,
-  Shapes, Smile, Trash2, Type,
+  AlignHorizontalJustifyCenter, BarChart3, BringToFront, Copy, Group, Image as ImageIcon, MoveDiagonal2, RotateCcw, RotateCw, SendToBack,
+  Shapes, Smile, Trash2, Type, Ungroup,
 } from "lucide-react";
 import PaginaBrochure, { ALTO, ANCHO, EstilosBrochure, claveAjuste } from "../brochure/PaginaBrochure";
 import { ETIQUETAS_CAMPO, ICONOS, variablesTema } from "../brochure/brochureBase";
@@ -26,11 +26,26 @@ function imantar(inicio, largo, guias) {
   return mejor || { d: 0, g: null };
 }
 
-function buscarNodo(raiz, sel) {
-  if (!raiz || !sel) return null;
-  const limpio = (v) => String(v).replace(/[^\w.-]/g, "");
-  if (sel.tipo === "elemento") return raiz.querySelector(`[data-elemento="${limpio(sel.id)}"]`);
-  return raiz.querySelector(`[data-campo="${limpio(sel.campo)}"]${sel.item != null ? `[data-item="${Number(sel.item)}"]` : ""}`);
+const limpio = (v) => String(v).replace(/[^\w.-]/g, "");
+const idsDe = (sel) => (sel?.tipo === "grupo" ? sel.ids : sel?.tipo === "elemento" ? [sel.id] : []);
+
+// Nodos del DOM de lo seleccionado (un bloque, un elemento o varios agrupados).
+function nodosDe(raiz, sel) {
+  if (!raiz || !sel) return [];
+  if (sel.tipo === "campo") {
+    const n = raiz.querySelector(`[data-campo="${limpio(sel.campo)}"]${sel.item != null ? `[data-item="${Number(sel.item)}"]` : ""}`);
+    return n ? [n] : [];
+  }
+  return idsDe(sel).map((id) => raiz.querySelector(`[data-elemento="${limpio(id)}"]`)).filter(Boolean);
+}
+
+function cajaDe(raiz, nodos) {
+  if (!nodos.length) return null;
+  const a = raiz.getBoundingClientRect();
+  const rs = nodos.map((n) => n.getBoundingClientRect());
+  const x1 = Math.min(...rs.map((r) => r.left)); const y1 = Math.min(...rs.map((r) => r.top));
+  const x2 = Math.max(...rs.map((r) => r.right)); const y2 = Math.max(...rs.map((r) => r.bottom));
+  return { x: x1 - a.left, y: y1 - a.top, w: x2 - x1, h: y2 - y1 };
 }
 
 export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, onCambiar, seleccion, onSeleccion }) {
@@ -42,6 +57,10 @@ export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, o
   const e = ancho / ANCHO;
   const elementos = pagina.elementos || [];
   const ajustes = pagina.ajustes || {};
+  const ids = idsDe(seleccion);
+  const variosElegidos = ids.length > 1;
+  const elegido = seleccion?.tipo === "elemento" ? elementos.find((x) => x.id === seleccion.id) : null;
+  const deSeleccion = elementos.filter((x) => ids.includes(x.id));
 
   const ponerElementos = useCallback((lista) => onCambiar({ ...pagina, elementos: lista }), [onCambiar, pagina]);
   const ponerAjuste = useCallback((clave, valor) => {
@@ -49,15 +68,23 @@ export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, o
     if (valor) nuevos[clave] = valor; else delete nuevos[clave];
     onCambiar({ ...pagina, ajustes: nuevos });
   }, [onCambiar, pagina]);
+  // Aplica un cambio a cada elemento seleccionado.
+  const cambiarElegidos = useCallback((fn) => ponerElementos(elementos.map((x) => (ids.includes(x.id) ? { ...x, ...fn(x) } : x))), [elementos, ids, ponerElementos]);
 
   // Recuadro de selección (se recalcula después de cada cambio).
   useLayoutEffect(() => {
-    const nodo = buscarNodo(raiz.current, seleccion);
-    if (!nodo) { setCaja(null); return; }
-    const a = raiz.current.getBoundingClientRect();
-    const b = nodo.getBoundingClientRect();
-    setCaja({ x: b.left - a.left, y: b.top - a.top, w: b.width, h: b.height });
+    setCaja(cajaDe(raiz.current, nodosDe(raiz.current, seleccion)));
   }, [seleccion, pagina, ancho]);
+
+  // Un elemento agrupado selecciona a todo su grupo.
+  const seleccionDeElemento = (id) => {
+    const el = elementos.find((x) => x.id === id);
+    if (el?.grupo) {
+      const delGrupo = elementos.filter((x) => x.grupo === el.grupo).map((x) => x.id);
+      if (delGrupo.length > 1) return { tipo: "grupo", ids: delGrupo, grupo: el.grupo };
+    }
+    return { tipo: "elemento", id };
+  };
 
   const alPresionar = (ev) => {
     if (ev.button > 0) return; // solo clic principal
@@ -66,36 +93,50 @@ export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, o
     const el = golpe?.closest("[data-elemento]");
     const campo = !el && golpe?.closest("[data-campo]");
     let sel = null;
-    if (el) sel = { tipo: "elemento", id: el.getAttribute("data-elemento") };
-    else if (campo) sel = { tipo: "campo", campo: campo.getAttribute("data-campo"), item: campo.hasAttribute("data-item") ? Number(campo.getAttribute("data-item")) : null };
+    if (el) {
+      const propia = seleccionDeElemento(el.getAttribute("data-elemento"));
+      // Shift + clic suma (o quita) elementos para agruparlos.
+      if (ev.shiftKey && ids.length && seleccion?.tipo !== "campo") {
+        const suma = idsDe(propia);
+        const yaEstan = suma.every((id) => ids.includes(id));
+        const nuevos = yaEstan ? ids.filter((id) => !suma.includes(id)) : [...new Set([...ids, ...suma])];
+        sel = nuevos.length > 1 ? { tipo: "grupo", ids: nuevos, grupo: null } : nuevos.length ? { tipo: "elemento", id: nuevos[0] } : null;
+        onSeleccion(sel);
+        return;
+      }
+      // Si ya era parte de lo seleccionado, se arrastra todo junto.
+      sel = ids.includes(propia.id || idsDe(propia)[0]) && variosElegidos ? seleccion : propia;
+    } else if (campo) sel = { tipo: "campo", campo: campo.getAttribute("data-campo"), item: campo.hasAttribute("data-item") ? Number(campo.getAttribute("data-item")) : null };
     onSeleccion(sel);
     if (!sel) return;
-    const original = sel.tipo === "elemento" ? elementos.find((x) => x.id === sel.id) : (ajustes[claveAjuste(sel.campo, sel.item)] || { x: 0, y: 0, s: 1 });
-    arrastre.current = { modo: "mover", sel, x: ev.clientX, y: ev.clientY, original: { ...original }, movido: false, ...medirGuias(sel) };
+    const originales = Object.fromEntries(elementos.filter((x) => idsDe(sel).includes(x.id)).map((x) => [x.id, { ...x }]));
+    const original = sel.tipo === "campo" ? (ajustes[claveAjuste(sel.campo, sel.item)] || { x: 0, y: 0, s: 1 }) : null;
+    arrastre.current = { modo: "mover", sel, x: ev.clientX, y: ev.clientY, original, originales, movido: false, ...medirGuias(sel) };
     capa.current?.setPointerCapture?.(ev.pointerId);
   };
 
-  // Rectángulo del elegido y guías (márgenes, centro y bordes de los demás), en px de diseño.
+  // Rectángulo de lo elegido y guías (márgenes, centro y bordes de los demás), en px de diseño.
   const medirGuias = (sel) => {
     const base = raiz.current.getBoundingClientRect();
-    const enDiseno = (r) => ({ x: (r.left - base.left) / e, y: (r.top - base.top) / e, w: r.width / e, h: r.height / e });
-    const propio = buscarNodo(raiz.current, sel);
-    const rect = propio ? enDiseno(propio.getBoundingClientRect()) : null;
+    const propios = nodosDe(raiz.current, sel);
+    const c = cajaDe(raiz.current, propios);
+    const rect = c ? { x: c.x / e, y: c.y / e, w: c.w / e, h: c.h / e } : null;
     const gx = [MARGEN, ANCHO / 2, ANCHO - MARGEN];
     const gy = [MARGEN, ALTO / 2, ALTO - MARGEN];
     raiz.current.querySelectorAll("[data-elemento], [data-campo]").forEach((n) => {
-      if (n === propio || propio?.contains(n) || n.contains(propio)) return;
-      const r = enDiseno(n.getBoundingClientRect());
-      if (r.w < 4 || r.h < 4) return;
-      gx.push(r.x, r.x + r.w / 2, r.x + r.w);
-      gy.push(r.y, r.y + r.h / 2, r.y + r.h);
+      if (propios.some((p) => n === p || p.contains(n) || n.contains(p))) return;
+      const r = n.getBoundingClientRect();
+      const d = { x: (r.left - base.left) / e, y: (r.top - base.top) / e, w: r.width / e, h: r.height / e };
+      if (d.w < 4 || d.h < 4) return;
+      gx.push(d.x, d.x + d.w / 2, d.x + d.w);
+      gy.push(d.y, d.y + d.h / 2, d.y + d.h);
     });
     return { rect, gx, gy };
   };
 
   const alPresionarGiro = (ev) => {
     ev.stopPropagation();
-    if (!seleccion || !caja) return;
+    if (!seleccion || !caja || variosElegidos) return;
     const base = raiz.current.getBoundingClientRect();
     const original = seleccion.tipo === "elemento" ? elementos.find((x) => x.id === seleccion.id) : (ajustes[claveAjuste(seleccion.campo, seleccion.item)] || { x: 0, y: 0, s: 1 });
     arrastre.current = { modo: "girar", sel: seleccion, cx: base.left + caja.x + caja.w / 2, cy: base.top + caja.y + caja.h / 2, original: { ...original }, movido: true };
@@ -105,8 +146,12 @@ export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, o
   const alPresionarEsquina = (ev) => {
     ev.stopPropagation();
     if (!seleccion) return;
-    const original = seleccion.tipo === "elemento" ? elementos.find((x) => x.id === seleccion.id) : (ajustes[claveAjuste(seleccion.campo, seleccion.item)] || { x: 0, y: 0, s: 1 });
-    arrastre.current = { modo: "tamano", sel: seleccion, x: ev.clientX, y: ev.clientY, original: { ...original }, anchoBase: (caja?.w || 100) / e };
+    const original = seleccion.tipo === "campo" ? (ajustes[claveAjuste(seleccion.campo, seleccion.item)] || { x: 0, y: 0, s: 1 }) : null;
+    const originales = Object.fromEntries(deSeleccion.map((x) => [x.id, { ...x }]));
+    arrastre.current = {
+      modo: "tamano", sel: seleccion, x: ev.clientX, y: ev.clientY, original, originales,
+      anchoBase: (caja?.w || 100) / e, altoBase: (caja?.h || 60) / e, origen: { x: (caja?.x || 0) / e, y: (caja?.y || 0) / e },
+    };
     capa.current?.setPointerCapture?.(ev.pointerId);
   };
 
@@ -132,54 +177,91 @@ export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, o
       dx += ix.d; dy += iy.d;
       setGuiasVisibles({ x: ix.g, y: iy.g });
     }
-    if (a.sel.tipo === "elemento") {
-      const o = a.original;
-      const cambio = a.modo === "mover"
-        ? { x: redondo(o.x + dx), y: redondo(o.y + dy) }
-        : ev.shiftKey ? (() => { const f = Math.max(0.1, (o.w + dx) / o.w); return { w: redondo(o.w * f), h: redondo(o.h * f) }; })()
-          : { w: redondo(Math.max(16, o.w + dx)), h: redondo(Math.max(10, o.h + dy)) };
-      ponerElementos(elementos.map((x) => (x.id === a.sel.id ? { ...x, ...cambio } : x)));
+    if (a.sel.tipo !== "campo") {
+      const os = a.originales;
+      const varios = Object.keys(os).length > 1;
+      ponerElementos(elementos.map((x) => {
+        const o = os[x.id];
+        if (!o) return x;
+        if (a.modo === "mover") return { ...x, x: redondo(o.x + dx), y: redondo(o.y + dy) };
+        if (!varios) {
+          if (ev.shiftKey) { const f = Math.max(0.1, (o.w + dx) / o.w); return { ...x, w: redondo(o.w * f), h: redondo(o.h * f) }; }
+          return { ...x, w: redondo(Math.max(16, o.w + dx)), h: redondo(Math.max(10, o.h + dy)) };
+        }
+        // Grupo: todo crece desde la esquina del grupo, manteniendo su lugar relativo.
+        let fx = Math.max(0.1, (a.anchoBase + dx) / a.anchoBase);
+        let fy = Math.max(0.1, (a.altoBase + dy) / a.altoBase);
+        if (ev.shiftKey) { fy = fx; }
+        const cambio = { x: redondo(a.origen.x + (o.x - a.origen.x) * fx), y: redondo(a.origen.y + (o.y - a.origen.y) * fy), w: redondo(Math.max(8, o.w * fx)), h: redondo(Math.max(6, o.h * fy)) };
+        if (o.tipo === "texto") cambio.tamano = Math.max(6, Math.round((Number(o.tamano) || 24) * Math.sqrt(fx * fy)));
+        return { ...x, ...cambio };
+      }));
     } else {
       const o = a.original;
       const clave = claveAjuste(a.sel.campo, a.sel.item);
       if (a.modo === "mover") ponerAjuste(clave, { ...o, x: redondo((o.x || 0) + dx), y: redondo((o.y || 0) + dy) });
-      else ponerAjuste(clave, { ...o, s: Math.round(Math.max(0.3, Math.min(3, (o.s || 1) * (1 + dx / Math.max(40, a.anchoBase)))) * 100) / 100 });
+      // Shift: escala en proporción. Normal: ancho y alto por separado (así una tarjeta se vuelve horizontal).
+      else if (ev.shiftKey) ponerAjuste(clave, { ...o, s: Math.round(Math.max(0.3, Math.min(3, (o.s || 1) * (1 + dx / Math.max(40, a.anchoBase)))) * 100) / 100 });
+      else ponerAjuste(clave, { ...o, s: 1, w: redondo(Math.max(30, a.anchoBase + dx)), h: redondo(Math.max(20, a.altoBase + dy)) });
     }
   };
   const alSoltar = () => { arrastre.current = null; setGuiasVisibles({ x: null, y: null }); };
 
-  const elegido = seleccion?.tipo === "elemento" ? elementos.find((x) => x.id === seleccion.id) : null;
   const agregar = (tipo) => { const nuevo = elementoNuevo(tipo); ponerElementos([...elementos, nuevo]); onSeleccion({ tipo: "elemento", id: nuevo.id }); };
-  const eliminar = useCallback(() => { if (!elegido) return; ponerElementos(elementos.filter((x) => x.id !== elegido.id)); onSeleccion(null); }, [elegido, elementos, ponerElementos, onSeleccion]);
-  const duplicar = () => { const copia = { ...elegido, id: elementoNuevo("x").id, x: elegido.x + 20, y: elegido.y + 20 }; ponerElementos([...elementos, copia]); onSeleccion({ tipo: "elemento", id: copia.id }); };
-  const capaOrden = (alFrente) => { const resto = elementos.filter((x) => x.id !== elegido.id); ponerElementos(alFrente ? [...resto, elegido] : [elegido, ...resto]); };
+  const eliminar = useCallback(() => {
+    if (!ids.length) return;
+    ponerElementos(elementos.filter((x) => !ids.includes(x.id)));
+    onSeleccion(null);
+  }, [ids, elementos, ponerElementos, onSeleccion]);
+  const duplicar = () => {
+    const nuevoGrupo = variosElegidos ? `g${elementoNuevo("x").id}` : null;
+    const copias = deSeleccion.map((x) => ({ ...x, id: elementoNuevo("x").id, x: x.x + 20, y: x.y + 20, ...(nuevoGrupo && x.grupo ? { grupo: nuevoGrupo } : {}) }));
+    ponerElementos([...elementos, ...copias]);
+    onSeleccion(copias.length > 1 ? { tipo: "grupo", ids: copias.map((c) => c.id), grupo: copias[0].grupo || null } : { tipo: "elemento", id: copias[0].id });
+  };
+  const capaOrden = (alFrente) => {
+    const resto = elementos.filter((x) => !ids.includes(x.id));
+    ponerElementos(alFrente ? [...resto, ...deSeleccion] : [...deSeleccion, ...resto]);
+  };
+  const agrupar = () => {
+    const g = `g${elementoNuevo("x").id}`;
+    cambiarElegidos(() => ({ grupo: g }));
+    onSeleccion({ tipo: "grupo", ids, grupo: g });
+  };
+  const desagrupar = () => { cambiarElegidos(() => ({ grupo: null })); onSeleccion({ tipo: "grupo", ids, grupo: null }); };
   const restablecer = () => ponerAjuste(claveAjuste(seleccion.campo, seleccion.item), null);
   const centrar = () => {
     if (!caja) return;
     const d = Math.round(ANCHO / 2 - (caja.x + caja.w / 2) / e);
-    if (elegido) ponerElementos(elementos.map((x) => (x.id === elegido.id ? { ...x, x: x.x + d } : x)));
+    if (ids.length) cambiarElegidos((x) => ({ x: x.x + d }));
     else { const k = claveAjuste(seleccion.campo, seleccion.item); const o = ajustes[k] || { x: 0, y: 0, s: 1 }; ponerAjuste(k, { ...o, x: (o.x || 0) + d }); }
   };
 
-  // Teclado: Supr borra, flechas mueven (Shift = 10 px).
+  // Teclado: Supr borra, flechas mueven (Shift = 10 px), Ctrl+G agrupa.
   useEffect(() => {
     const tecla = (ev) => {
       if (!seleccion || /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || "")) return;
-      if ((ev.key === "Delete" || ev.key === "Backspace") && elegido) { ev.preventDefault(); eliminar(); return; }
+      if ((ev.key === "Delete" || ev.key === "Backspace") && ids.length) { ev.preventDefault(); eliminar(); return; }
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "g" && variosElegidos) {
+        ev.preventDefault();
+        if (ev.shiftKey || seleccion.grupo) desagrupar(); else agrupar();
+        return;
+      }
       const paso = ev.shiftKey ? 10 : 1;
       const d = { ArrowLeft: [-paso, 0], ArrowRight: [paso, 0], ArrowUp: [0, -paso], ArrowDown: [0, paso] }[ev.key];
       if (!d) return;
       ev.preventDefault();
       ev.stopPropagation();
-      if (elegido) ponerElementos(elementos.map((x) => (x.id === elegido.id ? { ...x, x: x.x + d[0], y: x.y + d[1] } : x)));
+      if (ids.length) cambiarElegidos((x) => ({ x: x.x + d[0], y: x.y + d[1] }));
       else if (seleccion.tipo === "campo") { const k = claveAjuste(seleccion.campo, seleccion.item); const o = ajustes[k] || { x: 0, y: 0, s: 1 }; ponerAjuste(k, { ...o, x: (o.x || 0) + d[0], y: (o.y || 0) + d[1] }); }
     };
     window.addEventListener("keydown", tecla, true);
     return () => window.removeEventListener("keydown", tecla, true);
-  }, [seleccion, elegido, elementos, ajustes, eliminar, ponerElementos, ponerAjuste]);
+  });
 
   const ajusteActual = seleccion?.tipo === "campo" ? ajustes[claveAjuste(seleccion.campo, seleccion.item)] : null;
-  const nombre = elegido ? TIPOS_ELEMENTO[elegido.tipo] : seleccion ? NOMBRES[seleccion.campo] || seleccion.campo : "";
+  const nombre = variosElegidos ? (seleccion.grupo ? `Grupo de ${ids.length}` : `${ids.length} elementos`) : elegido ? TIPOS_ELEMENTO[elegido.tipo] : seleccion ? NOMBRES[seleccion.campo] || seleccion.campo : "";
+  const boton = "inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 font-bold text-white hover:bg-white/20";
 
   return <div className="space-y-3">
     <div className="flex flex-wrap items-center justify-center gap-1.5">
@@ -197,12 +279,16 @@ export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, o
           onPointerDown={alPresionar} onPointerMove={alMover} onPointerUp={alSoltar} onPointerCancel={alSoltar}>
           {guiasVisibles.x != null && <div className="pointer-events-none absolute inset-y-0 w-px" style={{ left: guiasVisibles.x * e, background: "#f472b6", boxShadow: "0 0 4px #f472b6" }} />}
           {guiasVisibles.y != null && <div className="pointer-events-none absolute inset-x-0 h-px" style={{ top: guiasVisibles.y * e, background: "#f472b6", boxShadow: "0 0 4px #f472b6" }} />}
-          {caja && <div className="pointer-events-none absolute border-2" style={{ left: caja.x - 3, top: caja.y - 3, width: caja.w + 6, height: caja.h + 6, borderColor: tema.color_acento, borderRadius: 6 }}>
-            <span className="absolute -top-6 left-0 max-w-[45%] truncate whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-bold" style={{ background: tema.color_acento, color: tema.color_oscuro }}>{nombre} · arrastra para mover</span>
-            <button type="button" aria-label="Girar" title="Arrastra para girar" onPointerDown={alPresionarGiro}
+          {variosElegidos && nodosDe(raiz.current, seleccion).map((n, i) => {
+            const r = cajaDe(raiz.current, [n]);
+            return r && <div key={i} className="pointer-events-none absolute border border-dashed" style={{ left: r.x - 1, top: r.y - 1, width: r.w + 2, height: r.h + 2, borderColor: tema.color_acento }} />;
+          })}
+          {caja && <div className="pointer-events-none absolute border-2" style={{ left: caja.x - 3, top: caja.y - 3, width: caja.w + 6, height: caja.h + 6, borderColor: tema.color_acento, borderRadius: 6, borderStyle: variosElegidos && !seleccion.grupo ? "dashed" : "solid" }}>
+            <span className="absolute -top-6 left-0 max-w-[60%] truncate whitespace-nowrap rounded-md px-2 py-0.5 text-[10px] font-bold" style={{ background: tema.color_acento, color: tema.color_oscuro }}>{nombre} · arrastra para mover</span>
+            {!variosElegidos && <button type="button" aria-label="Girar" title="Arrastra para girar" onPointerDown={alPresionarGiro}
               className="pointer-events-auto absolute -top-9 left-1/2 grid h-6 w-6 -translate-x-1/2 cursor-grab place-items-center rounded-full border-2 border-white shadow" style={{ background: tema.color_acento }}>
               <RotateCw size={12} color={tema.color_oscuro} />
-            </button>
+            </button>}
             <button type="button" aria-label="Cambiar tamaño" onPointerDown={alPresionarEsquina}
               className="pointer-events-auto absolute -bottom-2.5 -right-2.5 grid h-5 w-5 cursor-nwse-resize place-items-center rounded-full border-2 border-white shadow" style={{ background: tema.color_acento }}>
               <MoveDiagonal2 size={10} color={tema.color_oscuro} />
@@ -213,15 +299,18 @@ export default function BrochureLienzo({ pagina, tema, indice, paginas, ancho, o
     </div>
 
     {seleccion && <div className="flex flex-wrap items-center justify-center gap-1.5 text-xs">
-      <button type="button" onClick={centrar} className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 font-bold text-white hover:bg-white/20"><AlignHorizontalJustifyCenter size={13} />Centrar en la página</button>
-      {elegido ? <>
-        <button type="button" onClick={duplicar} className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 font-bold text-white hover:bg-white/20"><Copy size={13} />Duplicar</button>
-        <button type="button" onClick={() => capaOrden(true)} className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 font-bold text-white hover:bg-white/20"><BringToFront size={13} />Al frente</button>
-        <button type="button" onClick={() => capaOrden(false)} className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 font-bold text-white hover:bg-white/20"><SendToBack size={13} />Atrás</button>
+      {variosElegidos && (seleccion.grupo
+        ? <button type="button" onClick={desagrupar} className={boton}><Ungroup size={13} />Desagrupar</button>
+        : <button type="button" onClick={agrupar} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 font-black text-[#0d0724]" style={{ background: tema.color_acento }}><Group size={13} />Agrupar ({ids.length})</button>)}
+      <button type="button" onClick={centrar} className={boton}><AlignHorizontalJustifyCenter size={13} />Centrar en la página</button>
+      {ids.length ? <>
+        <button type="button" onClick={duplicar} className={boton}><Copy size={13} />Duplicar</button>
+        <button type="button" onClick={() => capaOrden(true)} className={boton}><BringToFront size={13} />Al frente</button>
+        <button type="button" onClick={() => capaOrden(false)} className={boton}><SendToBack size={13} />Atrás</button>
         <button type="button" onClick={eliminar} className="inline-flex items-center gap-1 rounded-lg bg-red-500/80 px-2.5 py-1.5 font-bold text-white hover:bg-red-500"><Trash2 size={13} />Eliminar</button>
-      </> : <button type="button" onClick={restablecer} disabled={!ajusteActual} className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 font-bold text-white hover:bg-white/20 disabled:opacity-40"><RotateCcw size={13} />Volver a su lugar y tamaño</button>}
+      </> : <button type="button" onClick={restablecer} disabled={!ajusteActual} className={`${boton} disabled:opacity-40`}><RotateCcw size={13} />Volver a su lugar y tamaño</button>}
     </div>}
-    <p className="text-center text-[11px] text-white/50">Clic para seleccionar · arrastra para mover (se imanta a las guías rosadas; Alt para soltarlo libre) · esquina para el tamaño · círculo de arriba para girar · flechas para mover fino · Supr para borrar · Ctrl+Z deshace</p>
+    <p className="text-center text-[11px] text-white/50">Clic para seleccionar · <b>Shift + clic</b> para elegir varios y <b>Agrupar</b> (texto + figura quedan unidos) · arrastra para mover (se imanta; Alt lo suelta libre) · esquina para el tamaño · círculo de arriba para girar · Supr borra · Ctrl+Z deshace</p>
   </div>;
 }
 

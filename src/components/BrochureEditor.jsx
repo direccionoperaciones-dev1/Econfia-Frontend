@@ -456,6 +456,9 @@ export default function BrochureEditor({ api, setToast }) {
             <div className="text-center"><div className="text-sm font-black text-content">Página {seleccion + 1} de {paginas.length}</div><div className="text-[11px] text-muted">{TIPOS_PAGINA[pagina.tipo]?.nombre}</div></div>
             <button type="button" disabled={seleccion === paginas.length - 1} onClick={() => setSeleccion(seleccion + 1)} className="rounded-lg p-1.5 text-muted hover:bg-surface-2 disabled:opacity-30" aria-label="Página siguiente"><ChevronRight size={18} /></button>
           </div>
+          {selLienzo?.tipo === "grupo" && <div className="mb-3 rounded-xl bg-brand/10 p-3 text-xs text-content">
+            <b>{selLienzo.grupo ? "Grupo" : "Varios elementos"} ({selLienzo.ids.length})</b> · {selLienzo.grupo ? "se mueven, cambian de tamaño, duplican y borran juntos. Para editar uno solo, dale «Desagrupar»." : "dale «Agrupar» debajo del lienzo para que queden unidos (por ejemplo, un texto encima de una figura)."}
+          </div>}
           {elementoElegido ? <div>
             <div className="mb-3 flex items-center justify-between rounded-xl bg-brand/10 px-3 py-2">
               <span className="text-sm font-black text-content">{TIPOS_ELEMENTO[elementoElegido.tipo]} seleccionado</span>

@@ -413,3 +413,76 @@ function PaginaFija({ pagina }) {
   const PaginaBrochure = require("./PaginaBrochure").default;
   return <div style={require("./brochureBase").variablesTema(BROCHURE_POR_DEFECTO.tema)}><PaginaBrochure pagina={pagina} tema={BROCHURE_POR_DEFECTO.tema} numero={2} paginas={BROCHURE_POR_DEFECTO.paginas} ancho={560} estatico /></div>;
 }
+
+describe("Tamaño libre de los bloques de la plantilla", () => {
+  it("la esquina cambia ancho y alto por separado (una tarjeta puede quedar horizontal)", () => {
+    const onCambiar = jest.fn();
+    const pagina = BROCHURE_POR_DEFECTO.paginas[5]; // productos (tarjetas)
+    render(<BrochureLienzo pagina={pagina} tema={BROCHURE_POR_DEFECTO.tema} indice={5} paginas={BROCHURE_POR_DEFECTO.paginas} ancho={560}
+      onCambiar={onCambiar} seleccion={{ tipo: "campo", campo: "items", item: 0 }} onSeleccion={jest.fn()} />);
+    fireEvent.pointerDown(screen.getByRole("button", { name: "Cambiar tamaño" }), { clientX: 0, clientY: 0, pointerId: 7 });
+    fireEvent.pointerMove(screen.getByTestId("capa-lienzo"), { clientX: 200, clientY: -20, pointerId: 7 });
+    const ajuste = onCambiar.mock.calls.at(-1)[0].ajustes["items.0"];
+    expect(ajuste.w).toBeGreaterThan(ajuste.h);
+    // Con Shift vuelve a escalar en proporción.
+    fireEvent.pointerMove(screen.getByTestId("capa-lienzo"), { clientX: 50, clientY: 0, pointerId: 7, shiftKey: true });
+    expect(onCambiar.mock.calls.at(-1)[0].ajustes["items.0"].s).toBeGreaterThan(1);
+  });
+
+  it("aplica el ancho y alto guardados a la tarjeta", () => {
+    const pagina = { ...BROCHURE_POR_DEFECTO.paginas[5], ajustes: { "items.0": { x: 0, y: 0, s: 1, w: 470, h: 90 } } };
+    const { container } = render(<BrochureLienzo pagina={pagina} tema={BROCHURE_POR_DEFECTO.tema} indice={5} paginas={BROCHURE_POR_DEFECTO.paginas} ancho={560}
+      onCambiar={jest.fn()} seleccion={null} onSeleccion={jest.fn()} />);
+    const tarjeta = container.querySelector('[data-campo="items"][data-item="0"]');
+    expect(tarjeta.style.width).toBe("470px");
+    expect(tarjeta.style.height).toBe("90px");
+  });
+});
+
+describe("Agrupar elementos (texto + figura)", () => {
+  function Lienzo({ inicial }) {
+    const [pagina, setPagina] = React.useState(inicial);
+    const [sel, setSel] = React.useState(null);
+    window.__pagina = pagina;
+    return <BrochureLienzo pagina={pagina} tema={BROCHURE_POR_DEFECTO.tema} indice={1} paginas={BROCHURE_POR_DEFECTO.paginas} ancho={560} onCambiar={setPagina} seleccion={sel} onSeleccion={setSel} />;
+  }
+  const inicial = { ...BROCHURE_POR_DEFECTO.paginas[1], elementos: [
+    { id: "f1", tipo: "forma", forma: "rectangulo", x: 100, y: 100, w: 200, h: 80 },
+    { id: "t1", tipo: "texto", texto: "Oferta", tamano: 20, x: 120, y: 120, w: 160, h: 40 },
+  ] };
+  const clic = (container, id, extra = {}) => {
+    const nodo = container.querySelector(`[data-elemento="${id}"]`);
+    document.elementsFromPoint = () => [nodo];
+    const capa = screen.getByTestId("capa-lienzo");
+    fireEvent.pointerDown(capa, { button: 0, clientX: 0, clientY: 0, pointerId: 11, ...extra });
+    return capa;
+  };
+
+  it("Shift + clic elige varios, Agrupar los une y luego se mueven juntos", () => {
+    const { container } = render(<Lienzo inicial={inicial} />);
+    fireEvent.pointerUp(clic(container, "f1"), { pointerId: 11 });
+    clic(container, "t1", { shiftKey: true });
+    fireEvent.click(screen.getByRole("button", { name: /Agrupar \(2\)/ }));
+    const grupo = window.__pagina.elementos[0].grupo;
+    expect(grupo).toBeTruthy();
+    expect(window.__pagina.elementos[1].grupo).toBe(grupo);
+
+    // Clic en el texto selecciona todo el grupo y al arrastrar se mueven los dos.
+    fireEvent.click(document.body);
+    const capa = clic(container, "t1", { altKey: true });
+    fireEvent.pointerMove(capa, { clientX: 30, clientY: 10, pointerId: 11, altKey: true });
+    fireEvent.pointerUp(capa, { pointerId: 11 });
+    expect(window.__pagina.elementos.map((x) => [x.x, x.y])).toEqual([[130, 110], [150, 130]]);
+    expect(screen.getByRole("button", { name: /Desagrupar/ })).toBeInTheDocument();
+  });
+
+  it("el grupo se borra completo con Supr y Desagrupar los separa", () => {
+    const agrupados = { ...inicial, elementos: inicial.elementos.map((x) => ({ ...x, grupo: "g1" })) };
+    const { container } = render(<Lienzo inicial={agrupados} />);
+    fireEvent.pointerUp(clic(container, "f1"), { pointerId: 11 });
+    fireEvent.click(screen.getByRole("button", { name: /Desagrupar/ }));
+    expect(window.__pagina.elementos.every((x) => !x.grupo)).toBe(true);
+    fireEvent.keyDown(window, { key: "Delete" });
+    expect(window.__pagina.elementos).toHaveLength(0);
+  });
+});

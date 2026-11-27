@@ -19,6 +19,9 @@ function useAj() {
     return {
       translate: `${Number(a.x) || 0}px ${Number(a.y) || 0}px`, scale: String(Number(a.s) || 1),
       rotate: a.r ? `${Number(a.r)}deg` : undefined, transformOrigin: a.r ? "center" : "top left",
+      // Tamaño libre (ancho y alto por separado) desde la esquina del lienzo.
+      ...(a.w ? { width: Number(a.w), maxWidth: "none", justifySelf: "start" } : {}),
+      ...(a.h ? { height: Number(a.h), overflow: "hidden" } : {}),
     };
   };
 }
