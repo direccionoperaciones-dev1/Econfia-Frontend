@@ -18,26 +18,51 @@ const PASOS = [
 ];
 const pct = (v) => Number(v || 0).toLocaleString("es-CO", { maximumFractionDigits: 2 });
 
+// Acceso protegido: tras validar el código que llega al correo, el navegador guarda
+// un permiso temporal (solo sirve en este equipo). El asesor entra con su sesión.
+const claveAcceso = (token) => `econfia_propuesta_acceso_${token}`;
+const leerAcceso = (token) => { try { return localStorage.getItem(claveAcceso(token)) || ""; } catch (e) { return ""; } };
+const guardarAcceso = (token, valor) => { try { if (valor) localStorage.setItem(claveAcceso(token), valor); else localStorage.removeItem(claveAcceso(token)); } catch (e) { /* sin almacenamiento */ } };
+const cabecerasPropuesta = (token, preview) => {
+  const h = {};
+  const acceso = leerAcceso(token);
+  if (acceso) h["X-Acceso-Propuesta"] = acceso;
+  if (preview) { try { const t = localStorage.getItem("token"); if (t) h.Authorization = `Token ${t}`; } catch (e) { /* sin sesión */ } }
+  return h;
+};
+const fechaHora = (iso) => iso ? new Date(iso).toLocaleString("es-CO", { day: "numeric", month: "long", hour: "numeric", minute: "2-digit" }) : "";
+
 export default function PropuestaPublica() {
   const { token } = useParams();
   const { search } = useLocation();
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [visor, setVisor] = useState(null); // imagen ampliada
+  const [bloqueo, setBloqueo] = useState(null); // {acceso: "requiere_codigo" | "caducado", correos}
+  const [recarga, setRecarga] = useState(0);
   const preview = new URLSearchParams(search).get("preview") === "1";
 
   useEffect(() => {
-    const preview = new URLSearchParams(search).get("preview") === "1" ? "?preview=1" : "";
-    fetch(`${API_URL}/api/propuestas/publica/${encodeURIComponent(token)}/${preview}`)
-      .then(async (r) => { if (!r.ok) throw new Error(r.status === 404 ? "Esta propuesta no existe o el enlace no es válido." : "No fue posible cargar la propuesta."); return r.json(); })
-      .then(setData)
+    const vista = new URLSearchParams(search).get("preview") === "1";
+    setError(""); setBloqueo(null);
+    fetch(`${API_URL}/api/propuestas/publica/${encodeURIComponent(token)}/${vista ? "?preview=1" : ""}`, { headers: cabecerasPropuesta(token, vista) })
+      .then(async (r) => {
+        if (r.status === 401 || r.status === 410) {
+          const body = await r.json().catch(() => ({}));
+          if (body.acceso) { if (r.status === 401) guardarAcceso(token, ""); setBloqueo(body); return; }
+        }
+        if (!r.ok) throw new Error(r.status === 404 ? "Esta propuesta no existe o el enlace no es válido." : "No fue posible cargar la propuesta.");
+        setData(await r.json());
+      })
       .catch((e) => setError(e.message));
-  }, [token, search]);
+  }, [token, search, recarga]);
 
   useEffect(() => {
     if (data) document.title = `Propuesta Econfia N.º ${data.numero}`;
   }, [data]);
 
+  if (bloqueo?.acceso === "caducado") return <Pantalla><div className="max-w-md text-center"><div className="text-5xl">⌛</div><h1 className="mt-4 text-2xl font-black">Este enlace caducó</h1><p className="mt-3 text-sm leading-6 text-violet-200/80">Por seguridad, el enlace de la propuesta N.º {bloqueo.numero} tiene un tiempo limitado. Responde el correo en el que la recibiste y tu asesor te la renueva.</p></div></Pantalla>;
+  if (bloqueo?.acceso === "requiere_codigo") return <Pantalla><Verificacion token={token} bloqueo={bloqueo} onListo={(acceso) => { guardarAcceso(token, acceso); setRecarga((n) => n + 1); }} /></Pantalla>;
   if (error) return <Pantalla><div className="text-center"><div className="text-5xl">🔒</div><h1 className="mt-4 text-2xl font-black">{error}</h1><p className="mt-2 text-sm text-violet-200/70">Si crees que es un error, responde el correo en el que la recibiste.</p></div></Pantalla>;
   if (!data) return <Pantalla><div className="h-12 w-12 animate-spin rounded-full border-4 border-violet-300/30 border-t-violet-300" /></Pantalla>;
 
@@ -159,6 +184,7 @@ export default function PropuestaPublica() {
                   <p className="mt-1 text-sm leading-6 text-violet-100/70">{texto}</p>
                 </li>)}
               </ol>
+              {data.enlace_vence && <div className="mt-4 rounded-2xl bg-white/[0.05] px-4 py-3 text-xs font-semibold text-violet-200/80">🔒 Por seguridad, este enlace está disponible hasta el {fechaHora(data.enlace_vence)}.</div>}
               <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${data.vencida ? "bg-red-500/15 text-red-200" : "bg-amber-400/10 text-amber-200"}`}>
                 {data.vencida ? `⚠️ Esta propuesta venció el ${fecha(data.valida_hasta)}.` : `⏳ Válida hasta el ${fecha(data.valida_hasta)}${diasRestantes > 0 ? `: quedan ${diasRestantes} día${diasRestantes === 1 ? "" : "s"}` : ": hoy es el último día"}.`}
               </div>
@@ -251,7 +277,7 @@ function Contrapropuesta({ data, token, preview, onEnviada }) {
     setEnviando(true); setMensaje(null);
     try {
       const r = await fetch(`${API_URL}/api/propuestas/publica/${encodeURIComponent(token)}/contrapropuesta/`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json", ...cabecerasPropuesta(token, false) },
         body: JSON.stringify({ items: editables.map((i) => ({ id: i.id, cantidad: cantidadDe(i) })), comentario, ...(!presupuestoAsesor && presupuesto > 0 ? { presupuesto } : {}) }),
       });
       const body = await r.json().catch(() => ({}));
@@ -312,6 +338,52 @@ function Contrapropuesta({ data, token, preview, onEnviada }) {
       </div>
     </div>}
   </section>;
+}
+
+// Pantalla de código: solo quien tiene acceso al correo del cliente abre la propuesta.
+function Verificacion({ token, bloqueo, onListo }) {
+  const [enviado, setEnviado] = useState(false);
+  const [codigo, setCodigo] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [mensaje, setMensaje] = useState(null);
+  const correos = bloqueo.correos || [];
+  const llamar = async (ruta, cuerpo) => {
+    const r = await fetch(`${API_URL}/api/propuestas/publica/${encodeURIComponent(token)}/${ruta}/`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(cuerpo || {}),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(body.detail || "No fue posible continuar. Intenta de nuevo.");
+    return body;
+  };
+  const pedir = async () => {
+    setOcupado(true); setMensaje(null);
+    try { await llamar("codigo"); setEnviado(true); setMensaje({ ok: true, texto: "Te enviamos un código de 6 dígitos. Vence en 10 minutos." }); }
+    catch (e) { setMensaje({ ok: false, texto: e.message }); if (/ya te enviamos/i.test(e.message)) setEnviado(true); }
+    finally { setOcupado(false); }
+  };
+  const verificar = async (e) => {
+    e.preventDefault();
+    setOcupado(true); setMensaje(null);
+    try { const r = await llamar("verificar", { codigo }); onListo(r.acceso); }
+    catch (err) { setMensaje({ ok: false, texto: err.message }); }
+    finally { setOcupado(false); }
+  };
+  return <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.06] p-7 text-center shadow-2xl backdrop-blur">
+    <div className="text-5xl">🔐</div>
+    <div className="mt-3 text-xs font-bold uppercase tracking-[0.3em] text-violet-300">Propuesta N.º {bloqueo.numero}</div>
+    <h1 className="mt-2 text-2xl font-black">Tu propuesta está protegida</h1>
+    <p className="mt-3 text-sm leading-6 text-violet-100/80">Para que solo tú veas los precios, te enviaremos un código a {correos.length > 1 ? "los correos" : "el correo"} en {correos.length > 1 ? "los" : "el"} que recibiste la propuesta:</p>
+    <div className="mt-2 space-y-0.5 text-sm font-bold text-white">{correos.map((c) => <div key={c}>{c}</div>)}</div>
+    {!enviado ? <button type="button" onClick={pedir} disabled={ocupado} className="mt-6 w-full rounded-xl bg-white px-5 py-3 text-sm font-black text-[#2c1470] transition hover:bg-violet-100 disabled:opacity-60">{ocupado ? "Enviando…" : "Enviar código a mi correo"}</button>
+      : <form onSubmit={verificar} className="mt-6">
+        <input aria-label="Código de verificación" autoFocus inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={codigo} onChange={(e) => setCodigo(e.target.value.replace(/[^0-9]/g, "").slice(0, 6))} placeholder="••••••"
+          className="h-14 w-full rounded-xl border border-white/15 bg-white/10 text-center text-3xl font-black tracking-[0.5em] text-white outline-none placeholder:text-violet-200/30 focus:border-violet-300" />
+        <button type="submit" disabled={ocupado || codigo.length !== 6} className="mt-3 w-full rounded-xl bg-emerald-400 px-5 py-3 text-sm font-black text-[#0d0724] transition hover:bg-emerald-300 disabled:opacity-50">{ocupado ? "Validando…" : "Ver mi propuesta"}</button>
+        <button type="button" onClick={pedir} disabled={ocupado} className="mt-3 text-xs font-bold text-violet-200 hover:text-white">¿No te llegó? Enviar otro código</button>
+      </form>}
+    {mensaje && <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${mensaje.ok ? "bg-emerald-400/10 text-emerald-200" : "bg-red-500/15 text-red-200"}`}>{mensaje.texto}</div>}
+    <p className="mt-5 text-[11px] leading-5 text-violet-200/50">Revisa también la carpeta de spam. Este equipo quedará autorizado por unas horas.</p>
+  </div>;
 }
 
 function Pantalla({ children }) {

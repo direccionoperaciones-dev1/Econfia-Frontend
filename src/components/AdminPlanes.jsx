@@ -545,6 +545,13 @@ export default function AdminPlanes() {
     try { await api(`/api/propuestas/${proposal.id}/`, { method: "PATCH", body: JSON.stringify({ estado }) }); await loadData(); }
     catch (error) { setToast({ type: "error", message: error.message }); }
   };
+  const renovarEnlace = async (proposal) => {
+    try {
+      const r = await api(`/api/propuestas/${proposal.id}/renovar-enlace/`, { method: "POST" });
+      setToast({ type: "success", message: `Enlace de la propuesta #${proposal.id} renovado${r.enlace_vence ? ` hasta el ${new Date(r.enlace_vence).toLocaleString("es-CO")}` : ""}.` });
+      await loadData();
+    } catch (error) { setToast({ type: "error", message: error.message }); }
+  };
   const deleteProposal = async (proposal) => {
     if (!window.confirm(`¿Eliminar la propuesta #${proposal.id}?`)) return;
     try { await api(`/api/propuestas/${proposal.id}/`, { method: "DELETE" }); setToast({ type: "success", message: "Propuesta eliminada." }); await loadData(); }
@@ -599,6 +606,7 @@ export default function AdminPlanes() {
           <CotizadorPresupuesto catalogo={catalogo} currency={displayCurrency} trm={trm} />
           <PlansTable loading={loading} planes={planes} displayCurrency={displayCurrency} trm={trm} onDiscount={saveDiscount} onEdit={editPlan} onRates={openRates} onAssign={openAssign} onDelete={deletePlan} />
         </> : <>
+          <SeguridadEnlaces api={api} setToast={setToast} onGuardado={loadData} />
           <form onSubmit={saveProposal} className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg md:p-6">
             <div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black text-content">{editingProposalId ? `Editar propuesta #${editingProposalId}` : "Nueva propuesta"}</h3>{editingProposalId && <button type="button" onClick={resetProposal} className="text-sm font-bold text-muted hover:text-content">Cancelar edición</button>}</div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -701,7 +709,7 @@ export default function AdminPlanes() {
             </div>
             <div className="mt-4 flex justify-end"><button disabled={saving} className="rounded-xl bg-gradient-to-r from-brand to-brand-2 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-brand/20 disabled:opacity-60">{saving ? "Guardando…" : editingProposalId ? "Actualizar propuesta" : "Guardar borrador"}</button></div>
           </form>
-          <ProposalsTable loading={loading} propuestas={propuestas} sendingId={sendingId} onSend={sendProposal} onEdit={(proposal) => editProposal(proposal)} onDelete={deleteProposal} onStatus={changeStatus} onCounter={usarContrapropuesta} />
+          <ProposalsTable loading={loading} propuestas={propuestas} sendingId={sendingId} onSend={sendProposal} onEdit={(proposal) => editProposal(proposal)} onDelete={deleteProposal} onStatus={changeStatus} onCounter={usarContrapropuesta} onRenew={renovarEnlace} />
         </>}
       </div>
       {showAssign && <Modal onClose={() => setShowAssign(false)}>
@@ -996,17 +1004,67 @@ function Contrapropuestas({ proposal, onCounter }) {
   </details>;
 }
 
-function ProposalsTable({ loading, propuestas, sendingId, onSend, onEdit, onDelete, onStatus, onCounter }) {
+function ProposalsTable({ loading, propuestas, sendingId, onSend, onEdit, onDelete, onStatus, onCounter, onRenew }) {
   return <div className="overflow-hidden rounded-[24px] border border-line/15 bg-surface/90 shadow-lg"><div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-left text-sm text-content">
     <thead className="bg-surface-2/80 text-[10px] uppercase tracking-[0.16em] text-muted"><tr><th className="px-5 py-3">Propuesta</th><th className="px-3 py-3">Cliente</th><th className="px-3 py-3">Incluye</th><th className="px-3 py-3">Total</th><th className="px-3 py-3">Vigencia</th><th className="px-3 py-3">Estado</th><th className="px-5 py-3 text-right">Acciones</th></tr></thead>
     <tbody>{loading ? <tr><td colSpan="7" className="px-5 py-12 text-center text-muted">Cargando propuestas…</td></tr> : propuestas.length === 0 ? <tr><td colSpan="7" className="px-5 py-12 text-center text-muted">Aún no hay propuestas comerciales.</td></tr> : propuestas.map((proposal) => <tr key={proposal.id} className="border-t border-line/10 hover:bg-brand/[0.04]">
       <td className="px-5 py-4"><div className="font-black">#{proposal.id}</div><div className="text-xs text-muted">{new Date(proposal.creada).toLocaleDateString("es-CO")}</div></td>
       <td className="px-3 py-4"><div className="font-bold">{proposal.cliente_nombre}</div><div className="text-xs text-muted">{proposal.cliente_email}{(proposal.correos_adicionales || []).length > 0 && ` +${proposal.correos_adicionales.length}`}</div>{proposal.cliente_empresa && <div className="text-xs text-muted">{proposal.cliente_empresa}</div>}</td>
       <td className="px-3 py-4"><ResumenServicios proposal={proposal} /></td><td className="px-3 py-4"><div className="font-black text-brand">{money(proposal.total, proposal.moneda)}</div>{proposal.presupuesto_cliente && <div className="text-[10px] text-muted">Presupuesto {money(proposal.presupuesto_cliente, proposal.moneda)}</div>}<Contrapropuestas proposal={proposal} onCounter={onCounter} /></td><td className="px-3 py-4">{new Date(`${proposal.valida_hasta}T00:00:00`).toLocaleDateString("es-CO")}</td>
-      <td className="px-3 py-4"><select className="rounded-lg border border-line/20 bg-surface px-2 py-1.5 text-xs font-bold text-content" value={proposal.estado} onChange={(e) => onStatus(proposal, e.target.value)}>{ESTADOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{proposal.fecha_envio && <div className="mt-1 text-[10px] text-muted">Enviada {new Date(proposal.fecha_envio).toLocaleString("es-CO")}</div>}<div className={`mt-1 text-[10px] font-semibold ${proposal.vistas ? "text-emerald-600" : "text-muted"}`} title={proposal.vista_ultima ? `Última vez: ${new Date(proposal.vista_ultima).toLocaleString("es-CO")}` : ""}>👁 {proposal.vistas ? `Abierta ${proposal.vistas} ${proposal.vistas === 1 ? "vez" : "veces"}` : "Sin abrir"}</div></td>
+      <td className="px-3 py-4"><select className="rounded-lg border border-line/20 bg-surface px-2 py-1.5 text-xs font-bold text-content" value={proposal.estado} onChange={(e) => onStatus(proposal, e.target.value)}>{ESTADOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{proposal.fecha_envio && <div className="mt-1 text-[10px] text-muted">Enviada {new Date(proposal.fecha_envio).toLocaleString("es-CO")}</div>}<EstadoEnlace proposal={proposal} onRenew={onRenew} /><div className={`mt-1 text-[10px] font-semibold ${proposal.vistas ? "text-emerald-600" : "text-muted"}`} title={proposal.vista_ultima ? `Última vez: ${new Date(proposal.vista_ultima).toLocaleString("es-CO")}` : ""}>👁 {proposal.vistas ? `Abierta ${proposal.vistas} ${proposal.vistas === 1 ? "vez" : "veces"}` : "Sin abrir"}</div></td>
       <td className="px-5 py-4"><div className="flex justify-end gap-2"><button onClick={() => onSend(proposal)} disabled={sendingId === proposal.id} className="rounded-lg bg-emerald-600 px-3 py-1.5 font-bold text-white disabled:opacity-60">{sendingId === proposal.id ? "Enviando…" : proposal.estado === "enviada" ? "Reenviar" : "Enviar"}</button>{proposal.enlace_publico && <a href={`${proposal.enlace_publico}?preview=1`} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-1.5 font-semibold text-violet-600">Ver</a>}<Action onClick={() => onEdit(proposal)} tone="brand">Editar</Action><Action onClick={() => onDelete(proposal)} tone="red">Eliminar</Action></div></td>
     </tr>)}</tbody>
   </table></div></div>;
+}
+
+// Enlace público de cada propuesta: hasta cuándo se abre y botón para renovarlo.
+function EstadoEnlace({ proposal, onRenew }) {
+  if (!proposal.fecha_envio) return null;
+  if (proposal.enlace_caducado) return <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-bold text-red-500">⌛ Enlace caducado
+    {onRenew && <button type="button" onClick={() => onRenew(proposal)} className="rounded-md bg-red-500/10 px-1.5 py-0.5 text-red-600 hover:bg-red-500/20">Renovar</button>}</div>;
+  if (!proposal.enlace_vence) return <div className="mt-1 text-[10px] font-semibold text-muted">🔓 Enlace sin límite de tiempo</div>;
+  return <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold text-muted" title="Por seguridad el enlace deja de abrirse en esa fecha">🔒 Enlace hasta {new Date(proposal.enlace_vence).toLocaleString("es-CO", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}
+    {onRenew && <button type="button" onClick={() => onRenew(proposal)} className="rounded-md bg-brand/10 px-1.5 py-0.5 font-bold text-brand hover:bg-brand/20">Renovar</button>}</div>;
+}
+
+// Reglas del enlace de las propuestas: aplican a todas, también a las ya enviadas.
+function SeguridadEnlaces({ api, setToast, onGuardado }) {
+  const [config, setConfig] = useState(null);
+  const [abierto, setAbierto] = useState(false);
+  const [guardando, setGuardando] = useState(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { api("/api/propuestas/configuracion/").then(setConfig).catch(() => setConfig(null)); }, []);
+  if (!config) return null;
+  const poner = (campo, valor) => setConfig((c) => ({ ...c, [campo]: valor }));
+  const guardar = async () => {
+    setGuardando(true);
+    try {
+      const r = await api("/api/propuestas/configuracion/", { method: "PUT", body: JSON.stringify({ horas_enlace: Number(config.horas_enlace) || 0, horas_acceso: Number(config.horas_acceso) || 1, exigir_codigo: config.exigir_codigo }) });
+      setConfig(r);
+      setToast({ type: "success", message: "Seguridad de los enlaces guardada. Ya aplica a todas las propuestas enviadas." });
+      onGuardado?.();
+    } catch (e) { setToast({ type: "error", message: e.message }); }
+    finally { setGuardando(false); }
+  };
+  const resumen = [config.exigir_codigo ? "código al correo" : "sin código", Number(config.horas_enlace) ? `enlace de ${config.horas_enlace} h` : "enlace sin límite"].join(" · ");
+  return <div className="mb-5 rounded-[24px] border border-line/15 bg-surface/90 p-5 shadow-lg">
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div><div className="text-sm font-black text-content">🔒 Seguridad de los enlaces</div><div className="text-xs text-muted">{resumen}. Aplica a todas las propuestas, también a las ya enviadas.</div></div>
+      <button type="button" onClick={() => setAbierto(!abierto)} className="rounded-xl border border-line/20 px-4 py-2 text-xs font-bold text-content hover:bg-brand/5">{abierto ? "Cerrar" : "Configurar"}</button>
+    </div>
+    {abierto && <div className="mt-4 grid gap-4 md:grid-cols-3">
+      <label className="block"><span className={labelClass}>Vida del enlace (horas desde el envío)</span>
+        <input type="number" min="0" max="8760" className={inputClass} value={config.horas_enlace} onChange={(e) => poner("horas_enlace", e.target.value)} aria-label="Vida del enlace en horas" />
+        <span className="mt-1 block text-[11px] text-muted">0 = sin límite. Al reenviar o renovar, el plazo vuelve a empezar.</span></label>
+      <label className="block"><span className={labelClass}>Equipo autorizado tras el código (horas)</span>
+        <input type="number" min="1" max="720" className={inputClass} value={config.horas_acceso} onChange={(e) => poner("horas_acceso", e.target.value)} aria-label="Horas autorizado tras el código" disabled={!config.exigir_codigo} />
+        <span className="mt-1 block text-[11px] text-muted">Después de este tiempo pide un código nuevo.</span></label>
+      <div><span className={labelClass}>Código al correo del cliente</span>
+        <label className="mt-1 flex items-center gap-2 text-sm font-semibold text-content"><input type="checkbox" className="h-5 w-5 accent-brand" checked={Boolean(config.exigir_codigo)} onChange={(e) => poner("exigir_codigo", e.target.checked)} />Pedir código para abrir la propuesta</label>
+        <span className="mt-1 block text-[11px] text-muted">Si reenvían el enlace, otra persona no ve los precios sin acceso a ese correo.</span></div>
+      <div className="md:col-span-3 flex justify-end"><button type="button" onClick={guardar} disabled={guardando} className="rounded-xl bg-gradient-to-r from-brand to-brand-2 px-5 py-2 text-sm font-bold text-white disabled:opacity-60">{guardando ? "Guardando…" : "Guardar seguridad"}</button></div>
+    </div>}
+  </div>;
 }
 
 function Action({ children, onClick, tone }) {

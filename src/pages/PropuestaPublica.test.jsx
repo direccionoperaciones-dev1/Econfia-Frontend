@@ -108,3 +108,46 @@ describe("explicación de la propuesta", () => {
     expect(screen.queryByLabelText("Tu presupuesto")).not.toBeInTheDocument();
   });
 });
+
+describe("enlace protegido", () => {
+  beforeEach(() => { localStorage.clear(); mockBusqueda = ""; });
+
+  it("pide el código del correo y, al validarlo, muestra la propuesta", async () => {
+    const llamadas = [];
+    global.fetch = jest.fn(async (u, options = {}) => {
+      llamadas.push({ u, options });
+      if (u.endsWith("/codigo/")) return { ok: true, status: 200, json: async () => ({ detail: "ok" }) };
+      if (u.endsWith("/verificar/")) return { ok: true, status: 200, json: async () => ({ acceso: "permiso-123" }) };
+      if (options.headers?.["X-Acceso-Propuesta"] === "permiso-123") return { ok: true, status: 200, json: async () => PROPUESTA };
+      return { ok: false, status: 401, json: async () => ({ numero: 4, acceso: "requiere_codigo", correos: ["an***@acme.com"] }) };
+    });
+    render(<PropuestaPublica />);
+    expect(await screen.findByText("Tu propuesta está protegida")).toBeInTheDocument();
+    expect(screen.getByText("an***@acme.com")).toBeInTheDocument();
+    expect(screen.queryByText(/900\.000/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Enviar código a mi correo" }));
+    fireEvent.change(await screen.findByLabelText("Código de verificación"), { target: { value: "12a3456" } });
+    expect(screen.getByLabelText("Código de verificación")).toHaveValue("123456");
+    fireEvent.click(screen.getByRole("button", { name: "Ver mi propuesta" }));
+    expect(await screen.findByText("Cómo funciona tu propuesta")).toBeInTheDocument();
+    expect(localStorage.getItem("econfia_propuesta_acceso_abc")).toBe("permiso-123");
+    expect(JSON.parse(llamadas.find((l) => l.u.endsWith("/verificar/")).options.body)).toEqual({ codigo: "123456" });
+  });
+
+  it("muestra que el enlace caducó sin mostrar precios", async () => {
+    global.fetch = jest.fn(async () => ({ ok: false, status: 410, json: async () => ({ numero: 4, acceso: "caducado" }) }));
+    render(<PropuestaPublica />);
+    expect(await screen.findByText("Este enlace caducó")).toBeInTheDocument();
+    expect(screen.queryByText("Cómo funciona tu propuesta")).not.toBeInTheDocument();
+  });
+
+  it("la vista previa del asesor manda su sesión", async () => {
+    localStorage.setItem("token", "tok-admin");
+    const vistos = [];
+    global.fetch = jest.fn(async (u, options = {}) => { vistos.push(options.headers || {}); return { ok: true, status: 200, json: async () => PROPUESTA }; });
+    mockBusqueda = "?preview=1";
+    render(<PropuestaPublica />);
+    expect(await screen.findByText("Cómo funciona tu propuesta")).toBeInTheDocument();
+    expect(vistos[0].Authorization).toBe("Token tok-admin");
+  });
+});
