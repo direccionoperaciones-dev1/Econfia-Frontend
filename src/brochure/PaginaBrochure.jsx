@@ -290,11 +290,84 @@ function Contacto({ pagina, tema, adorno, editable }) {
   </div>;
 }
 
+function MisionVision({ pagina, tema, numero, adorno }) {
+  const aj = useAj();
+  const claro = pagina.fondo !== "oscuro";
+  const items = pagina.items || [];
+  return <div className={`${claro ? "bq-claro" : "bq-oscuro"} relative isolate h-full p-11`}>
+    {adorno}
+    <Imagen src={pagina.imagen} alto={140} className="mb-6 rounded-[22px] shadow-lg" />
+    <Encabezado pagina={{ kicker: pagina.kicker, titulo: pagina.titulo }} claro={claro} />
+    <div className="mt-6 space-y-3">
+      {items.map((it, i) => <div key={i} data-campo="items" data-item={i} style={aj("items", i)} className="bq-cajon relative flex gap-4 overflow-hidden rounded-[20px] p-5">
+        <span className="bq-titulo pointer-events-none absolute -right-2 -top-6 text-[90px] font-black leading-none opacity-[0.07]">“</span>
+        <div className="bq-icono grid h-12 w-12 shrink-0 place-items-center rounded-2xl"><Icono nombre={it.icono} /></div>
+        <div className="min-w-0"><div className="bq-titulo text-[17px] font-extrabold">{it.titulo}</div>{it.texto && <p className="bq-suave mt-1.5 text-[12px] leading-[1.65] opacity-75">{it.texto}</p>}</div>
+      </div>)}
+    </div>
+    <Pie numero={numero} tema={tema} claro={claro} />
+  </div>;
+}
+
+function LineaTiempo({ pagina, tema, numero, adorno }) {
+  const aj = useAj();
+  const claro = pagina.fondo !== "oscuro";
+  const items = pagina.items || [];
+  const linea = claro ? "var(--b-primario)" : "var(--b-acento)";
+  return <div className={`${claro ? "bq-claro" : "bq-oscuro"} relative isolate h-full p-11`}>
+    {adorno}
+    <Encabezado pagina={pagina} claro={claro} />
+    <div className="relative mt-8">
+      <div className="absolute bottom-2 left-1/2 top-2 w-0.5 -translate-x-1/2 opacity-30" style={{ background: linea }} />
+      <div className="space-y-4">
+        {items.map((it, i) => {
+          const izquierda = i % 2 === 0;
+          return <div key={i} className={`relative flex items-center ${izquierda ? "justify-start" : "justify-end"}`}>
+            <span className="absolute left-1/2 top-1/2 z-10 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-4" style={{ borderColor: linea, background: claro ? "var(--b-claro)" : "var(--b-oscuro)" }} />
+            <div data-campo="items" data-item={i} style={aj("items", i)} className={`bq-cajon w-[45%] rounded-[18px] p-4 ${izquierda ? "text-right" : "text-left"}`}>
+              <div className="bq-valor bq-titulo text-[22px] font-black leading-none">{it.valor}</div>
+              <div className="mt-1.5 text-[13px] font-extrabold">{it.titulo}</div>
+              {it.texto && <p className="bq-suave mt-1 text-[11px] leading-[1.55] opacity-70">{it.texto}</p>}
+            </div>
+          </div>;
+        })}
+      </div>
+    </div>
+    <Pie numero={numero} tema={tema} claro={claro} />
+  </div>;
+}
+
+function Clientes({ pagina, tema, numero, adorno }) {
+  const aj = useAj();
+  const claro = pagina.fondo !== "oscuro";
+  const items = pagina.items || [];
+  return <div className={`${claro ? "bq-claro" : "bq-oscuro"} relative isolate h-full p-11`}>
+    {adorno}
+    <style>{`.bq-logo img { filter: grayscale(100%); opacity: .75; transition: filter .35s, opacity .35s, transform .35s; } .bq-logo:hover img { filter: none; opacity: 1; transform: scale(1.06); }`}</style>
+    <Encabezado pagina={pagina} claro={claro} />
+    <div className={`mt-7 grid gap-3 ${items.length > 4 ? "grid-cols-3" : "grid-cols-2"}`}>
+      {items.map((it, i) => <div key={i} data-campo="items" data-item={i} style={aj("items", i)} className="bq-cajon bq-logo grid h-24 place-items-center rounded-[18px] p-4" title={it.titulo}>
+        {enlaceSeguro(it.imagen) ? <img src={enlaceSeguro(it.imagen)} alt={it.titulo || "Cliente"} draggable={false} className="max-h-full max-w-full object-contain" />
+          : <span className="text-center text-[12px] font-bold opacity-60">{it.titulo || "Logo"}</span>}
+      </div>)}
+    </div>
+    {pagina.cita && <figure data-campo="cita" style={aj("cita")} className="bq-cajon mt-7 rounded-[20px] p-5">
+      <span className="bq-titulo block text-[44px] font-black leading-[0.6]" style={{ color: claro ? "var(--b-primario)" : "var(--b-acento)" }}>“</span>
+      <blockquote className="mt-2 text-[13px] italic leading-[1.7]">{pagina.cita}</blockquote>
+      {pagina.autor && <figcaption className="bq-suave mt-3 text-[11px] font-bold uppercase tracking-[0.15em] opacity-70">— {pagina.autor}</figcaption>}
+    </figure>}
+    <Pie numero={numero} tema={tema} claro={claro} />
+  </div>;
+}
+
 function Blanca({ tema, adorno }) {
   return <div className="bq-oscuro relative isolate grid h-full place-items-center">{adorno}<Logo src={tema.logo} className="h-14 w-auto opacity-60" /></div>;
 }
 
-const RENDER = { portada: Portada, texto_imagen: TextoImagen, indice: Indice, tarjetas: Tarjetas, cifras: Cifras, pasos: Pasos, contacto: Contacto, blanca: Blanca };
+const RENDER = {
+  portada: Portada, texto_imagen: TextoImagen, indice: Indice, tarjetas: Tarjetas, cifras: Cifras, pasos: Pasos, contacto: Contacto, blanca: Blanca,
+  mision_vision: MisionVision, linea_tiempo: LineaTiempo, clientes: Clientes,
+};
 const OSCURAS = new Set(["portada", "contacto", "blanca"]);
 
 /**

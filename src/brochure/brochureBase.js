@@ -61,6 +61,9 @@ export const TIPOS_PAGINA = {
   tarjetas: { nombre: "Tarjetas (productos, beneficios)", campos: ["kicker", "titulo", "texto", "items", "fondo"], item: ["icono", "titulo", "texto"] },
   cifras: { nombre: "Cifras", campos: ["kicker", "titulo", "texto", "items", "imagen", "fondo"], item: ["valor", "titulo", "texto"] },
   pasos: { nombre: "Pasos / proceso", campos: ["kicker", "titulo", "texto", "items", "fondo"], item: ["titulo", "texto"] },
+  mision_vision: { nombre: "Misión, visión y propósito", campos: ["kicker", "titulo", "items", "imagen", "fondo"], item: ["icono", "titulo", "texto"] },
+  linea_tiempo: { nombre: "Experiencia (línea de tiempo)", campos: ["kicker", "titulo", "texto", "items", "fondo"], item: ["valor", "titulo", "texto"] },
+  clientes: { nombre: "Clientes y aliados (logos)", campos: ["kicker", "titulo", "texto", "items", "cita", "autor", "fondo"], item: ["imagen", "titulo"] },
   contacto: { nombre: "Contraportada / contacto", campos: ["kicker", "titulo", "texto", "items", "boton", "imagen"], item: ["icono", "titulo", "texto", "enlace"] },
 };
 
@@ -68,7 +71,7 @@ export const ETIQUETAS_CAMPO = {
   entradas: "Líneas del índice", kicker: "Antetítulo (pequeño, arriba)", titulo: "Título", destacado: "Palabra destacada en color", subtitulo: "Subtítulo",
   texto: "Texto", puntos: "Viñetas (una por línea)", imagen: "Imagen", posicion_imagen: "Imagen arriba o abajo",
   fondo: "Fondo", etiqueta: "Sello (ej. año)", items: "Elementos", boton: "Botón",
-  icono: "Ícono", valor: "Cifra", enlace: "Enlace (https://, mailto:, tel:)",
+  icono: "Ícono", valor: "Cifra o año", enlace: "Enlace (https://, mailto:, tel:)", cita: "Testimonio (opcional)", autor: "Quién lo dice",
 };
 
 // Ayudas cortas para quien edita por primera vez.
@@ -89,6 +92,22 @@ export const paginaNueva = (tipo) => {
   if (tipo === "cifras") return { ...base, items: [{ valor: "100%", titulo: "Indicador", texto: "" }] };
   if (tipo === "pasos") return { ...base, items: [{ titulo: "Primer paso", texto: "Qué pasa aquí." }] };
   if (tipo === "contacto") return { ...base, fondo: "oscuro", items: [{ icono: "correo", titulo: "Correo", texto: "soporte@econfia.co", enlace: "mailto:soporte@econfia.co" }] };
+  if (tipo === "mision_vision") return { ...base, kicker: "Quiénes somos", titulo: "Grupo Soluciones", fondo: "claro", imagen: "/img/brochure/legal.jpg", items: [
+    { icono: "objetivo", titulo: "Misión", texto: "Escribe aquí la misión de la empresa." },
+    { icono: "estrella", titulo: "Visión", texto: "Escribe aquí hacia dónde va la empresa." },
+    { icono: "alianza", titulo: "Propósito", texto: "Escribe aquí por qué existe la empresa." },
+  ] };
+  if (tipo === "valores") return { ...base, tipo: "tarjetas", kicker: "Lo que nos mueve", titulo: "Nuestros valores", fondo: "claro", items: [
+    { icono: "escudo", titulo: "Confianza", texto: "Describe el valor." }, { icono: "balanza", titulo: "Ética", texto: "Describe el valor." },
+    { icono: "personas", titulo: "Servicio", texto: "Describe el valor." }, { icono: "rayo", titulo: "Innovación", texto: "Describe el valor." },
+  ] };
+  if (tipo === "linea_tiempo") return { ...base, kicker: "Nuestra experiencia", titulo: "Años construyendo confianza", fondo: "claro", items: [
+    { valor: "Año", titulo: "Hito", texto: "Qué pasó ese año." }, { valor: "Año", titulo: "Hito", texto: "Qué pasó ese año." },
+    { valor: "Hoy", titulo: "Econfia", texto: "Plataforma de verificación y estudios de seguridad." },
+  ] };
+  if (tipo === "clientes") return { ...base, kicker: "Confían en nosotros", titulo: "Clientes y aliados", fondo: "claro",
+    texto: "Sube el logo de cada cliente o aliado (con su autorización para publicarlo).",
+    items: [{ imagen: "", titulo: "Cliente 1" }, { imagen: "", titulo: "Cliente 2" }, { imagen: "", titulo: "Cliente 3" }] };
   if (tipo === "texto_imagen") return { ...base, texto: "Escribe aquí el contenido de la página.", imagen: "/img/brochure/seguridad.jpg" };
   return base;
 };

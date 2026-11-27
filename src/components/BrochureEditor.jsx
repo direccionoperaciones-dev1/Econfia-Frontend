@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   ArrowDown, ArrowUp, BookOpen, ChevronLeft, ChevronRight, Clapperboard, Columns3, Copy, ExternalLink, ImagePlus,
   Layers, Link2, MousePointerClick, Palette, Pencil, Plus, Redo2, RotateCcw, Save, ScrollText, Trash2, Undo2, Wand2, X,
@@ -33,32 +33,54 @@ function Campo({ id, label, ayuda, children }) {
 }
 
 // Imagen: subir archivo, pegar URL o elegir de la galería.
+// Biblioteca de imágenes subidas (se comparte entre todos los campos de imagen).
+const BibliotecaCtx = createContext({ imagenes: [], subirVarias: null, eliminar: null });
+
 function CampoImagen({ valor, onChange, subir }) {
   const ref = useRef(null);
+  const biblioteca = useContext(BibliotecaCtx);
   const [subiendo, setSubiendo] = useState(false);
+  const [verBiblioteca, setVerBiblioteca] = useState(false);
   const elegir = async (e) => {
-    const archivo = e.target.files?.[0];
+    const archivos = Array.from(e.target.files || []);
     e.target.value = "";
-    if (!archivo) return;
+    if (!archivos.length) return;
     setSubiendo(true);
-    try { onChange(await subir(archivo)); } catch (err) { /* el toast ya avisó */ } finally { setSubiendo(false); }
+    try {
+      if (biblioteca.subirVarias) {
+        const nuevas = await biblioteca.subirVarias(archivos);
+        if (nuevas[0]) onChange(nuevas[0].url);
+        if (nuevas.length > 1) setVerBiblioteca(true);
+      } else onChange(await subir(archivos[0]));
+    } catch (err) { /* el toast ya avisó */ } finally { setSubiendo(false); }
   };
   return <div className="space-y-2">
     <div className="flex items-center gap-3">
       <div className="h-16 w-24 shrink-0 overflow-hidden rounded-lg border border-line/20 bg-surface-2">{enlaceSeguro(valor) && <img src={enlaceSeguro(valor)} alt="" className="h-full w-full object-cover" />}</div>
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={() => ref.current?.click()} disabled={subiendo} className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"><ImagePlus size={14} />{subiendo ? "Subiendo…" : "Subir imagen"}</button>
+        <button type="button" onClick={() => setVerBiblioteca(!verBiblioteca)} className="rounded-lg border border-line/20 px-3 py-1.5 text-xs font-bold text-content">Mis imágenes ({biblioteca.imagenes.length})</button>
         {valor && <button type="button" onClick={() => onChange("")} className="rounded-lg px-2 py-1.5 text-xs font-bold text-muted hover:text-red-500">Quitar</button>}
       </div>
-      <input ref={ref} type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={elegir} />
+      <input ref={ref} type="file" multiple accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={elegir} aria-label="Subir imágenes" />
     </div>
+    {verBiblioteca && <div className="rounded-xl border border-line/15 bg-surface-2/40 p-2">
+      <div className="mb-1.5 flex items-center justify-between text-[11px] font-bold text-muted"><span>Imágenes guardadas: toca una para usarla</span><span>Puedes subir varias a la vez</span></div>
+      {biblioteca.imagenes.length === 0 ? <p className="py-3 text-center text-xs text-muted">Aún no has subido imágenes.</p>
+        : <div className="grid max-h-48 grid-cols-4 gap-1.5 overflow-y-auto">{biblioteca.imagenes.map((img) => <div key={img.id} className="group relative">
+          <button type="button" onClick={() => onChange(img.url)} title={img.nombre}
+            className={`block h-14 w-full overflow-hidden rounded-md border-2 ${valor === img.url ? "border-brand" : "border-transparent hover:border-brand/50"}`}><img src={img.url} alt={img.nombre} className="h-full w-full object-cover" /></button>
+          {biblioteca.eliminar && <button type="button" aria-label={`Borrar ${img.nombre}`} onClick={() => biblioteca.eliminar(img)}
+            className="absolute right-0.5 top-0.5 hidden h-5 w-5 place-items-center rounded-full bg-red-500 text-white group-hover:grid"><Trash2 size={11} /></button>}
+        </div>)}</div>}
+    </div>}
     <input className={inputClass} placeholder="o pega la URL de una imagen (https://…)" value={valor || ""} onChange={(e) => onChange(e.target.value)} />
     <div className="flex gap-1.5 overflow-x-auto pb-1">{GALERIA.map((src) => <button key={src} type="button" onClick={() => onChange(src)} title="Usar esta imagen"
       className={`h-10 w-14 shrink-0 overflow-hidden rounded-md border-2 ${valor === src ? "border-brand" : "border-transparent opacity-70 hover:opacity-100"}`}><img src={src} alt="" className="h-full w-full object-cover" /></button>)}</div>
   </div>;
 }
 
-function EditorItems({ tipo, items, onChange }) {
+function EditorItems({ tipo, items, onChange, subir }) {
   const campos = TIPOS_PAGINA[tipo]?.item || [];
   const poner = (i, campo, valor) => onChange(items.map((it, j) => (j === i ? { ...it, [campo]: valor } : it)));
   const mover = (i, d) => { const n = [...items]; [n[i], n[i + d]] = [n[i + d], n[i]]; onChange(n); };
@@ -75,6 +97,8 @@ function EditorItems({ tipo, items, onChange }) {
         {campos.map((campo) => campo === "icono"
           ? <div key={campo} className="flex flex-wrap gap-1">{Object.entries(ICONOS).map(([nombre, Icono]) => <button key={nombre} type="button" title={nombre} onClick={() => poner(i, "icono", nombre)}
               className={`grid h-8 w-8 place-items-center rounded-lg border ${it.icono === nombre ? "border-brand bg-brand/15 text-brand" : "border-line/15 text-muted hover:text-content"}`}><Icono size={15} /></button>)}</div>
+          : campo === "imagen"
+            ? <CampoImagen key={campo} valor={it.imagen || ""} onChange={(v) => poner(i, "imagen", v)} subir={subir} />
           : campo === "texto"
             ? <textarea key={campo} rows={2} className={inputClass} placeholder={ETIQUETAS_CAMPO[campo]} value={it[campo] || ""} onChange={(e) => poner(i, campo, e.target.value)} />
             : <input key={campo} className={inputClass} placeholder={ETIQUETAS_CAMPO[campo]} value={it[campo] || ""} onChange={(e) => poner(i, campo, e.target.value)} />)}
@@ -115,7 +139,7 @@ function EditorPagina({ pagina, onChange, subir, paginas = [], onCambiarPagina }
       const props = { id: `bq-campo-${campo}`, label, ayuda: AYUDAS_CAMPO[campo] };
       if (campo === "entradas") return <Campo key={campo} {...props}><EditorEntradas paginas={paginas} onCambiarPagina={onCambiarPagina} /></Campo>;
       if (campo === "imagen") return <Campo key={campo} {...props}><CampoImagen valor={pagina.imagen} onChange={(v) => poner("imagen", v)} subir={subir} /></Campo>;
-      if (campo === "items") return <Campo key={campo} {...props}><EditorItems tipo={pagina.tipo} items={pagina.items || []} onChange={(v) => poner("items", v)} /></Campo>;
+      if (campo === "items") return <Campo key={campo} {...props}><EditorItems tipo={pagina.tipo} items={pagina.items || []} onChange={(v) => poner("items", v)} subir={subir} /></Campo>;
       if (campo === "fondo") return <Campo key={campo} {...props}><select className={inputClass} value={pagina.fondo || "claro"} onChange={(e) => poner("fondo", e.target.value)}><option value="claro">Claro</option><option value="oscuro">Oscuro (color principal)</option></select></Campo>;
       if (campo === "posicion_imagen") return <Campo key={campo} {...props}><select className={inputClass} value={pagina.posicion_imagen || "abajo"} onChange={(e) => poner("posicion_imagen", e.target.value)}><option value="arriba">Arriba</option><option value="abajo">Abajo</option></select></Campo>;
       if (campo === "boton") return <Campo key={campo} {...props}><div className="grid gap-2 sm:grid-cols-2">
@@ -301,6 +325,30 @@ export default function BrochureEditor({ api, setToast }) {
     setFoco({ campo: campo || "titulo", item, n: Date.now() });
   };
 
+  const [imagenes, setImagenes] = useState([]);
+  const cargarBiblioteca = async () => {
+    try { const lista = await api("/api/brochure/imagenes/"); setImagenes(Array.isArray(lista) ? lista : []); } catch (e) { /* sin biblioteca */ }
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { cargarBiblioteca(); }, []);
+  const subirVarias = async (archivos) => {
+    const fd = new FormData();
+    archivos.forEach((a) => fd.append("archivos", a));
+    try {
+      const r = await api("/api/brochure/imagenes/", { method: "POST", body: fd });
+      const nuevas = r.imagenes || (r.url ? [r] : []);
+      setImagenes((prev) => [...nuevas, ...prev]);
+      if (nuevas.length > 1) setToast({ type: "success", message: `${nuevas.length} imágenes guardadas en tu biblioteca.` });
+      return nuevas;
+    } catch (e) { setToast({ type: "error", message: e.message }); throw e; }
+  };
+  const eliminarImagen = async (img) => {
+    if (!window.confirm(`¿Borrar «${img.nombre}» de la biblioteca? Si alguna página la usa, dejará de verse.`)) return;
+    try { await api(`/api/brochure/imagenes/${img.id}/`, { method: "DELETE" }); setImagenes((prev) => prev.filter((i) => i.id !== img.id)); }
+    catch (e) { setToast({ type: "error", message: e.message }); }
+  };
+  const biblioteca = { imagenes, subirVarias, eliminar: eliminarImagen };
+
   const subir = async (archivo) => {
     const fd = new FormData();
     fd.append("archivo", archivo);
@@ -337,7 +385,7 @@ export default function BrochureEditor({ api, setToast }) {
   const ponerElemento = (el) => ponerPagina(seleccion, { ...pagina, elementos: (pagina.elementos || []).map((x) => (x.id === el.id ? el : x)) });
   const fondoVista = `radial-gradient(circle at 80% 0%, ${tema.color_primario}cc, transparent 55%), ${tema.color_oscuro}`;
 
-  return <div className="space-y-4">
+  return <BibliotecaCtx.Provider value={biblioteca}><div className="space-y-4">
     <div className="sticky top-2 z-30 flex flex-col gap-3 rounded-[24px] border border-line/15 bg-surface/95 p-4 shadow-lg backdrop-blur md:flex-row md:items-center md:justify-between">
       <div>
         <h3 className="text-lg font-black text-content">Brochure interactivo</h3>
@@ -436,7 +484,8 @@ export default function BrochureEditor({ api, setToast }) {
           <div className="mt-4 rounded-2xl border border-dashed border-line/30 p-3">
             <div className="mb-2 text-xs font-bold text-content">Agregar una página nueva</div>
             <div className="flex gap-2">
-              <select className={inputClass} value={nuevoTipo} onChange={(e) => setNuevoTipo(e.target.value)} aria-label="Tipo de página nueva">{Object.entries(TIPOS_PAGINA).map(([k, v]) => <option key={k} value={k}>{v.nombre}</option>)}</select>
+              <select className={inputClass} value={nuevoTipo} onChange={(e) => setNuevoTipo(e.target.value)} aria-label="Tipo de página nueva"><optgroup label="De la empresa">{[["mision_vision", "Misión, visión y propósito"], ["valores", "Valores"], ["linea_tiempo", "Experiencia (línea de tiempo)"], ["clientes", "Clientes y aliados (logos)"]].map(([k, v]) => <option key={k} value={k}>{v}</option>)}</optgroup>
+                <optgroup label="Generales">{Object.entries(TIPOS_PAGINA).filter(([k]) => !["mision_vision", "linea_tiempo", "clientes"].includes(k)).map(([k, v]) => <option key={k} value={k}>{v.nombre}</option>)}</optgroup></select>
               <button type="button" onClick={agregar} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-brand px-3 py-2 text-sm font-bold text-white"><Plus size={15} />Agregar</button>
             </div>
             <p className="mt-2 text-[11px] text-muted">Se agrega después de la página {seleccion + 1}. En formato Revista lo ideal es un número par de páginas.</p>
@@ -488,5 +537,5 @@ export default function BrochureEditor({ api, setToast }) {
         </div>}
       </div>
     </div>
-  </div>;
+  </div></BibliotecaCtx.Provider>;
 }

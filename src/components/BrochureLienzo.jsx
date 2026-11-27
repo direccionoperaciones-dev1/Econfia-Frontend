@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import PaginaBrochure, { ALTO, ANCHO, EstilosBrochure, claveAjuste } from "../brochure/PaginaBrochure";
 import { ETIQUETAS_CAMPO, ICONOS, variablesTema } from "../brochure/brochureBase";
-import { ANIMACIONES_ELEMENTO, FORMAS, TIPOS_ELEMENTO, elementoNuevo } from "../brochure/Elementos";
+import { ANIMACIONES_ELEMENTO, DESVANECER, FORMAS, GRAFICAS, MEZCLAS, TIPOS_ELEMENTO, elementoNuevo } from "../brochure/Elementos";
 
 const inputClass = "w-full rounded-xl border border-line/20 bg-surface-2/60 px-3 py-2 text-sm text-content outline-none transition focus:border-brand";
 const redondo = (n) => Math.round(n);
@@ -237,6 +237,16 @@ function Color({ el, poner, campo, label }) {
   </label>;
 }
 
+function Deslizador({ el, poner, campo, label, min, max, inicial, sufijo = "" }) {
+  const valor = el[campo] ?? inicial;
+  return <Fila label={`${label}: ${valor}${sufijo}`}><input type="range" min={min} max={max} value={valor} onChange={(e) => poner(campo, Number(e.target.value))} className="w-full" aria-label={label} /></Fila>;
+}
+
+function Mezcla({ el, poner }) {
+  return <Fila label="Mezcla con lo de atrás"><select className={inputClass} value={el.mezcla || "normal"} onChange={(e) => poner("mezcla", e.target.value)} aria-label="Mezcla con lo de atrás">
+    {Object.entries(MEZCLAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Fila>;
+}
+
 // Propiedades del elemento libre seleccionado (panel derecho del editor).
 export function PanelElemento({ el, onChange, CampoImagen, subir }) {
   const poner = (campo, valor) => onChange({ ...el, [campo]: valor });
@@ -252,10 +262,29 @@ export function PanelElemento({ el, onChange, CampoImagen, subir }) {
         <label className="flex items-center gap-1.5"><input type="checkbox" checked={el.fuente === "titulos"} onChange={(e) => poner("fuente", e.target.checked ? "titulos" : "normal")} />Fuente de títulos</label>
       </div>
       <Color el={el} poner={poner} campo="color" label="Color del texto" />
+      <label className="flex items-center gap-1.5 text-xs font-bold text-content"><input type="checkbox" checked={Boolean(el.resplandor)} onChange={(e) => poner("resplandor", e.target.checked)} />Resplandor (brillo alrededor)</label>
+      <details className="rounded-xl border border-line/15 p-2" open={Boolean(el.relleno_imagen)}>
+        <summary className="cursor-pointer text-xs font-bold text-content">Rellenar las letras con una imagen</summary>
+        <div className="mt-2"><CampoImagen valor={el.relleno_imagen || ""} onChange={(v) => poner("relleno_imagen", v)} subir={subir} /></div>
+        <p className="mt-1 text-[11px] text-muted">Funciona mejor con letra grande y en negrilla.</p>
+      </details>
+      <Mezcla el={el} poner={poner} />
     </>}
     {el.tipo === "imagen" && <>
       <Fila label="Imagen"><CampoImagen valor={el.imagen} onChange={(v) => poner("imagen", v)} subir={subir} /></Fila>
       <Fila label={`Esquinas redondeadas: ${el.radio || 0}px`}><input type="range" min="0" max="120" value={el.radio || 0} onChange={(e) => poner("radio", Number(e.target.value))} className="w-full" /></Fila>
+      <div className="rounded-xl border border-line/15 p-2">
+        <div className="mb-2 text-xs font-black text-content">Efectos de la imagen</div>
+        <div className="grid grid-cols-2 gap-2">
+          <Deslizador el={el} poner={poner} campo="desenfoque" label="Difuminar" min={0} max={20} inicial={0} sufijo="px" />
+          <Deslizador el={el} poner={poner} campo="gris" label="Blanco y negro" min={0} max={100} inicial={0} sufijo="%" />
+          <Deslizador el={el} poner={poner} campo="brillo" label="Brillo" min={30} max={170} inicial={100} sufijo="%" />
+          <Deslizador el={el} poner={poner} campo="contraste" label="Contraste" min={30} max={170} inicial={100} sufijo="%" />
+        </div>
+        <Fila label="Desvanecer"><select className={inputClass} value={el.desvanecer || "ninguno"} onChange={(e) => poner("desvanecer", e.target.value)} aria-label="Desvanecer">
+          {Object.entries(DESVANECER).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Fila>
+        <div className="mt-2"><Mezcla el={el} poner={poner} /></div>
+      </div>
     </>}
     {el.tipo === "icono" && <>
       <Fila label="Ícono"><div className="flex flex-wrap gap-1">{Object.entries(ICONOS).map(([nombre, Icono]) => <button key={nombre} type="button" title={nombre} onClick={() => poner("icono", nombre)}
@@ -267,10 +296,16 @@ export function PanelElemento({ el, onChange, CampoImagen, subir }) {
       <Fila label="Forma"><select className={inputClass} value={el.forma} onChange={(e) => poner("forma", e.target.value)}>{Object.entries(FORMAS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></Fila>
       {el.forma === "rectangulo" && <Fila label={`Esquinas: ${el.radio || 0}px`}><input type="range" min="0" max="80" value={el.radio || 0} onChange={(e) => poner("radio", Number(e.target.value))} className="w-full" /></Fila>}
       <Color el={el} poner={poner} campo="color" label="Color" />
+      <Deslizador el={el} poner={poner} campo="desenfoque" label="Difuminar (mancha de luz)" min={0} max={60} inicial={0} sufijo="px" />
+      <Mezcla el={el} poner={poner} />
     </>}
     {el.tipo === "grafica" && <>
-      <Fila label="Tipo de gráfica"><select className={inputClass} value={el.grafica} onChange={(e) => poner("grafica", e.target.value)}><option value="barras">Barras</option><option value="dona">Dona</option></select></Fila>
-      <Fila label="Datos (una línea por dato: «Etiqueta: valor»)"><textarea rows={4} className={inputClass} value={el.datos || ""} onChange={(e) => poner("datos", e.target.value)} /></Fila>
+      <Fila label="Tipo de gráfica"><div className="grid grid-cols-2 gap-1.5">{Object.entries(GRAFICAS).map(([k, v]) => <button key={k} type="button" onClick={() => poner("grafica", k)}
+        className={`rounded-lg border px-2 py-1.5 text-xs font-bold ${el.grafica === k ? "border-brand bg-brand/15 text-brand" : "border-line/15 text-muted hover:text-content"}`}>{v}</button>)}</div></Fila>
+      <Fila label="Título de la gráfica (opcional)"><input className={inputClass} value={el.titulo_grafica || ""} onChange={(e) => poner("titulo_grafica", e.target.value)} /></Fila>
+      <Fila label="Datos (una línea por dato: «Etiqueta: valor»)"><textarea rows={5} className={inputClass} value={el.datos || ""} onChange={(e) => poner("datos", e.target.value)} /></Fila>
+      <Fila label="Unidad después del número (ej. %, M, clientes)"><input className={inputClass} value={el.sufijo || ""} onChange={(e) => poner("sufijo", e.target.value)} /></Fila>
+      <p className="text-[11px] text-muted">Las barras crecen al aparecer y, al pasar el cursor, cada dato se resalta y muestra su valor.</p>
       <Color el={el} poner={poner} campo="color" label="Color principal" />
     </>}
     <div className="grid grid-cols-2 gap-2">

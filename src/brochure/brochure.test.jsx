@@ -336,3 +336,80 @@ describe("Índice editable", () => {
     expect(container.querySelectorAll('.bq-lienzo [data-campo="indice"]')).toHaveLength(antes - 1);
   });
 });
+
+describe("Empresa, biblioteca, gráficas y efectos", () => {
+  const tema = BROCHURE_POR_DEFECTO.tema;
+  const paginas = BROCHURE_POR_DEFECTO.paginas;
+  const lienzo = (pagina) => render(<BrochureLienzo pagina={pagina} tema={tema} indice={1} paginas={paginas} ancho={560} onCambiar={jest.fn()} seleccion={null} onSeleccion={jest.fn()} />);
+
+  it("dibuja misión/visión, línea de tiempo y clientes con testimonio", () => {
+    lienzo({ tipo: "mision_vision", titulo: "Grupo Soluciones", items: [{ icono: "objetivo", titulo: "Misión", texto: "Proteger decisiones" }, { icono: "estrella", titulo: "Visión", texto: "Ser referente" }] });
+    expect(screen.getByText("Proteger decisiones")).toBeInTheDocument();
+    lienzo({ tipo: "linea_tiempo", titulo: "Experiencia", items: [{ valor: "2010", titulo: "Fundación" }, { valor: "2026", titulo: "Econfia" }] });
+    expect(screen.getByText("2010")).toBeInTheDocument();
+    lienzo({ tipo: "clientes", titulo: "Clientes", items: [{ imagen: "/img/a.png", titulo: "ACME" }], cita: "Excelente servicio", autor: "Gerente ACME" });
+    expect(screen.getByAltText("ACME")).toBeInTheDocument();
+    expect(screen.getByText("— Gerente ACME")).toBeInTheDocument();
+  });
+
+  it("agrega la página de Valores como tarjetas listas para editar", async () => {
+    ancho = 1300;
+    const api = jest.fn(async () => ({ contenido: null, publicado: true }));
+    render(<BrochureEditor api={api} setToast={jest.fn()} />);
+    await screen.findByText("Página 1 de 10");
+    fireEvent.click(screen.getByRole("button", { name: "Páginas" }));
+    fireEvent.change(screen.getByLabelText("Tipo de página nueva"), { target: { value: "valores" } });
+    fireEvent.click(screen.getByRole("button", { name: "Agregar" }));
+    expect(screen.getByText("Página 2 de 11")).toBeInTheDocument();
+    expect(screen.getAllByText("Nuestros valores").length).toBeGreaterThan(0);
+  });
+
+  it("la biblioteca lista las imágenes guardadas y sube varias a la vez", async () => {
+    ancho = 1300;
+    const llamadas = [];
+    const api = jest.fn(async (path, options = {}) => {
+      llamadas.push({ path, ...options });
+      if (path === "/api/brochure/imagenes/" && !options.method) return [{ id: 1, url: "https://api.econfia.co/media/brochure/a.png", nombre: "logo.png" }];
+      if (path === "/api/brochure/imagenes/" && options.method === "POST") return { imagenes: [{ id: 2, url: "https://api.econfia.co/media/brochure/b.png", nombre: "b.png" }, { id: 3, url: "https://api.econfia.co/media/brochure/c.png", nombre: "c.png" }] };
+      return { contenido: null, publicado: true };
+    });
+    render(<BrochureEditor api={api} setToast={jest.fn()} />);
+    await screen.findByText("Página 1 de 10");
+    const boton = await screen.findAllByRole("button", { name: "Mis imágenes (1)" });
+    fireEvent.click(boton[0]);
+    fireEvent.click(screen.getAllByTitle("logo.png")[0]);
+    expect(screen.getAllByDisplayValue("https://api.econfia.co/media/brochure/a.png").length).toBeGreaterThan(0);
+    const archivos = [new File(["x"], "b.png", { type: "image/png" }), new File(["y"], "c.png", { type: "image/png" })];
+    fireEvent.change(screen.getAllByLabelText("Subir imágenes")[0], { target: { files: archivos } });
+    await waitFor(() => expect(llamadas.some((l) => l.method === "POST")).toBe(true));
+    const post = llamadas.find((l) => l.method === "POST");
+    expect(post.body.getAll("archivos")).toHaveLength(2);
+    expect(await screen.findAllByRole("button", { name: "Mis imágenes (3)" })).not.toHaveLength(0);
+  });
+
+  it("las gráficas de tendencia y barras horizontales muestran el valor al pasar el cursor", () => {
+    const pagina = { ...paginas[1], elementos: [
+      { id: "g1", tipo: "grafica", grafica: "barras_h", datos: "Fast: 45\nFull: 30", sufijo: "%", x: 0, y: 0, w: 300, h: 120 },
+      { id: "g2", tipo: "grafica", grafica: "linea", datos: "2024: 10\n2025: 40", x: 0, y: 200, w: 300, h: 150 },
+    ] };
+    render(<PaginaFija pagina={pagina} />);
+    expect(screen.getByText("45%")).toBeInTheDocument();
+    fireEvent.mouseEnter(screen.getByText("Fast").closest("div"));
+    expect(screen.getByText("Fast: 45%")).toBeInTheDocument();
+    expect(screen.getByText("2025")).toBeInTheDocument();
+  });
+
+  it("aplica efectos a la imagen y mezcla con el fondo", () => {
+    const pagina = { ...paginas[1], elementos: [{ id: "i1", tipo: "imagen", imagen: "/img/brochure/lupa.jpg", desenfoque: 4, gris: 100, desvanecer: "abajo", mezcla: "multiply", x: 0, y: 0, w: 100, h: 100 }] };
+    const { container } = render(<PaginaFija pagina={pagina} />);
+    const img = container.querySelector('[data-elemento="i1"] img');
+    expect(img.style.filter).toContain("blur(4px)");
+    expect(img.style.filter).toContain("grayscale(100%)");
+    expect(container.querySelector('[data-elemento="i1"]').style.mixBlendMode).toBe("multiply");
+  });
+});
+
+function PaginaFija({ pagina }) {
+  const PaginaBrochure = require("./PaginaBrochure").default;
+  return <div style={require("./brochureBase").variablesTema(BROCHURE_POR_DEFECTO.tema)}><PaginaBrochure pagina={pagina} tema={BROCHURE_POR_DEFECTO.tema} numero={2} paginas={BROCHURE_POR_DEFECTO.paginas} ancho={560} estatico /></div>;
+}
