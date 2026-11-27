@@ -13,7 +13,7 @@ const money = (value, currency = "COP") => new Intl.NumberFormat("es-CO", {
 const fecha = (iso) => iso ? new Date(`${iso}T00:00:00`).toLocaleDateString("es-CO", { day: "numeric", month: "long", year: "numeric" }) : "";
 const PASOS = [
   [1, "Revisa", "Mira cada servicio, sus beneficios y el valor total."],
-  [2, "Confirma", "Responde el correo en el que recibiste esta propuesta."],
+  [2, "Nos reunimos", "Revisamos la propuesta contigo en una reunión presencial y cerramos los detalles."],
   [3, "Empieza", "Activamos tu acceso y te acompañamos en el arranque."],
 ];
 const pct = (v) => Number(v || 0).toLocaleString("es-CO", { maximumFractionDigits: 2 });
@@ -76,6 +76,8 @@ export default function PropuestaPublica() {
       </header>
 
       <main className="mx-auto max-w-6xl px-4 py-12 sm:px-6 md:py-16">
+        <ComoFunciona data={data} />
+
         {imagenes.length > 0 && <section className="mb-14">
           <Titulo kicker="Conoce la plataforma" titulo="Así se ve Econfia" />
           <div className={`grid gap-3 ${imagenes.length === 1 ? "" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
@@ -174,7 +176,7 @@ export default function PropuestaPublica() {
             </div>
             <div className="mt-4 flex items-end justify-between border-t border-white/25 pt-4"><span className="text-sm font-bold">Total</span><span className="text-3xl font-black">{money(data.total, data.moneda)}</span></div>
             {data.moneda === "USD" && data.tasa_cambio_trm && <div className="mt-2 text-[11px] text-violet-100/80">Convertido con TRM {money(data.tasa_cambio_trm, "COP")} del {fecha(data.fecha_trm)}.</div>}
-            <p className="mt-5 rounded-2xl bg-white/10 p-4 text-sm leading-6">¿Listo para empezar? <b>Responde el correo</b> en el que recibiste esta propuesta y te acompañamos en la activación.</p>
+            <p className="mt-5 rounded-2xl bg-white/10 p-4 text-sm leading-6">¿Listo para empezar? <b>Responde el correo</b> en el que recibiste esta propuesta y agendamos la reunión presencial para revisarla juntos.</p>
           </div>
         </section>
       </main>
@@ -189,6 +191,38 @@ export default function PropuestaPublica() {
   );
 }
 
+// Explicación fija de la propuesta: se ve en todas (también en las ya enviadas),
+// porque la página se arma al abrir el enlace.
+function ComoFunciona({ data }) {
+  const presupuesto = Number(data.presupuesto_cliente) || 0;
+  const editable = !data.vencida && data.items.some((i) => !i.es_bono);
+  const irACotizador = () => document.getElementById("personaliza")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  const tarjetas = [
+    ["🤝", "Propuesta con descuento", "Esta es una propuesta de descuento preparada para ti. La revisaremos juntos en una reunión presencial, donde resolvemos tus dudas y cerramos los detalles."],
+    presupuesto > 0
+      ? ["🎯", "Ajustada a tu presupuesto", `Armamos esta cotización a partir del presupuesto que nos compartiste (${money(presupuesto, data.moneda)}). Al personalizarla verás siempre cuánto te queda o si te pasas.`]
+      : ["🧮", "Es un ejemplo de referencia", "Como aún no tenemos un presupuesto definido, las cantidades de esta cotización son solo un ejemplo genérico para que conozcas los precios. Si tienes un presupuesto, escríbelo al personalizar y te mostramos cuánto te alcanza."],
+    ["✏️", "Cambia las cantidades a tu gusto", "En «Personaliza tu cotización» eliges cuántas consultas, estudios o pruebas quieres de cada servicio y el sistema calcula los precios automáticamente, con el descuento ya aplicado."],
+  ];
+  return <section className="mb-14 print:hidden">
+    <Titulo kicker="Antes de empezar" titulo="Cómo funciona tu propuesta" />
+    <div className="grid gap-4 md:grid-cols-3">
+      {tarjetas.map(([icono, titulo, texto]) => <div key={titulo} className="rounded-3xl border border-violet-300/15 bg-white/[0.05] p-5">
+        <div className="grid h-11 w-11 place-items-center rounded-2xl bg-violet-500/25 text-xl">{icono}</div>
+        <div className="mt-3 text-lg font-black">{titulo}</div>
+        <p className="mt-1.5 text-sm leading-6 text-violet-100/75">{texto}</p>
+      </div>)}
+    </div>
+    <ul className="mt-4 grid gap-x-6 gap-y-1.5 rounded-2xl bg-white/[0.03] px-5 py-4 text-sm text-violet-100/70 sm:grid-cols-2">
+      <li>• Solo cambian las cantidades; el precio por unidad es el de esta propuesta.</li>
+      <li>• Los servicios de regalo (🎁 bono) no se modifican.</li>
+      <li>• «Volver a lo cotizado» deja todo como estaba al inicio.</li>
+      <li>• Puedes enviar una nueva versión cuando quieras; tu asesor la recibe.</li>
+    </ul>
+    {editable && <button type="button" onClick={irACotizador} className="mt-4 rounded-xl bg-white px-5 py-2.5 text-sm font-black text-[#2c1470] transition hover:bg-violet-100">Ir a personalizar mi cotización ↓</button>}
+  </section>;
+}
+
 // El cliente cambia cantidades (no precios): todo se recalcula con lo cotizado y,
 // si nos dijo su presupuesto, no puede pasarse de él.
 function Contrapropuesta({ data, token, preview, onEnviada }) {
@@ -199,8 +233,11 @@ function Contrapropuesta({ data, token, preview, onEnviada }) {
   const [comentario, setComentario] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [mensaje, setMensaje] = useState(null);
+  // Si el asesor no registró presupuesto, el cliente puede escribir el suyo (opcional).
+  const presupuestoAsesor = Number(data.presupuesto_cliente) || 0;
+  const [presupuestoPropio, setPresupuestoPropio] = useState(() => presupuestoAsesor ? "" : String(Math.round(Number(data.contrapropuesta?.presupuesto) || 0) || ""));
   const combo = 1 - Number(data.descuento_porcentaje || 0) / 100;
-  const presupuesto = Number(data.presupuesto_cliente) || 0;
+  const presupuesto = presupuestoAsesor || parseInt(presupuestoPropio, 10) || 0;
   const valorDe = (item) => Number(item.valor_unitario || 0) * combo;
   const cantidadDe = (item) => Math.max(0, parseInt(cantidades[item.id], 10) || 0);
   const total = editables.reduce((acc, i) => acc + valorDe(i) * cantidadDe(i), 0);
@@ -215,7 +252,7 @@ function Contrapropuesta({ data, token, preview, onEnviada }) {
     try {
       const r = await fetch(`${API_URL}/api/propuestas/publica/${encodeURIComponent(token)}/contrapropuesta/`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: editables.map((i) => ({ id: i.id, cantidad: cantidadDe(i) })), comentario }),
+        body: JSON.stringify({ items: editables.map((i) => ({ id: i.id, cantidad: cantidadDe(i) })), comentario, ...(!presupuestoAsesor && presupuesto > 0 ? { presupuesto } : {}) }),
       });
       const body = await r.json().catch(() => ({}));
       if (!r.ok) throw new Error(body.detail || "No fue posible enviar tu cotización personalizada.");
@@ -226,15 +263,24 @@ function Contrapropuesta({ data, token, preview, onEnviada }) {
     finally { setEnviando(false); }
   };
 
-  return <section className="mb-14 rounded-3xl border border-violet-300/20 bg-white/[0.04] p-6 print:hidden">
+  return <section id="personaliza" className="mb-14 scroll-mt-6 rounded-3xl border border-violet-300/20 bg-white/[0.04] p-6 print:hidden">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <Titulo kicker="¿Quieres otra combinación?" titulo="Ajusta las cantidades" compacto />
       {!abierta && <button type="button" onClick={() => { setAbierta(true); setMensaje(null); }} className="rounded-xl bg-white px-5 py-2.5 text-sm font-black text-[#2c1470] transition hover:bg-violet-100">Personaliza tu cotización</button>}
     </div>
-    <p className="max-w-3xl text-sm leading-6 text-violet-100/75">Cambia cuántas consultas, estudios o pruebas quieres de cada servicio. Los precios son los de esta propuesta y el total se calcula solo{presupuesto > 0 ? `, sin pasarte de tu presupuesto de ${money(presupuesto, data.moneda)}` : ""}.</p>
+    <p className="max-w-3xl text-sm leading-6 text-violet-100/75">Cambia cuántas consultas, estudios o pruebas quieres de cada servicio. Los precios son los de esta propuesta y el total se calcula solo{presupuesto > 0 ? `, sin pasarte de tu presupuesto de ${money(presupuesto, data.moneda)}` : ". Las cantidades actuales son solo un ejemplo: ajústalas a lo que necesitas"}.</p>
     {data.contrapropuesta && !abierta && <div className="mt-4 rounded-2xl bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200">✅ Enviaste tu cotización personalizada el {new Date(data.contrapropuesta.creada).toLocaleString("es-CO")} por {money(data.contrapropuesta.total, data.moneda)}. Tu asesor te contactará; si quieres, puedes enviar otra.</div>}
     {mensaje && <div className={`mt-4 rounded-2xl px-4 py-3 text-sm font-semibold ${mensaje.ok ? "bg-emerald-400/10 text-emerald-200" : "bg-red-500/15 text-red-200"}`}>{mensaje.texto}</div>}
     {abierta && <div className="mt-5">
+      {!presupuestoAsesor && <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-emerald-300/20 bg-emerald-400/[0.06] p-4">
+        <div className="min-w-[200px] flex-1"><div className="font-black">¿Tienes un presupuesto para invertir?</div><div className="text-xs text-violet-200/70">Es opcional. Si lo escribes, te mostramos cuánto te alcanza y no te dejamos pasarte.</div></div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-bold text-violet-200">{data.moneda === "USD" ? "US$" : "$"}</span>
+          <input aria-label="Tu presupuesto" inputMode="numeric" placeholder="Ej. 2000000" value={presupuestoPropio} onChange={(e) => setPresupuestoPropio(e.target.value.replace(/[^0-9]/g, "").slice(0, 12))} className="h-10 w-44 rounded-xl border border-white/15 bg-white/10 px-3 text-right font-black text-white outline-none placeholder:font-normal placeholder:text-violet-200/40 focus:border-emerald-300" />
+          {presupuestoPropio && <button type="button" onClick={() => setPresupuestoPropio("")} className="text-xs font-bold text-violet-200/70 hover:text-white">Quitar</button>}
+        </div>
+        {presupuesto > 0 && <div className="w-full text-xs text-emerald-200">Tu presupuesto: <b>{money(presupuesto, data.moneda)}</b></div>}
+      </div>}
       <div className="space-y-3">
         {editables.map((item) => {
           const n = cantidadDe(item);
